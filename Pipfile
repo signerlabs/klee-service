@@ -1,0 +1,92 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+python-dotenv = "*"
+pyinstaller = "*"
+pydantic-settings = "*"
+requests = "*"
+llama-cpp-python = "*"
+openai = "*"
+langchain = "*"
+langchain-community = "*"
+langchain-text-splitters = "*"
+langchain-openai = "*"
+aiosqlite = "*"
+sqlalchemy = "*"
+greenlet = "*"
+sentence-transformers = "*"
+langchain-huggingface = "*"
+pymupdf = "*"
+transformers = "*"
+tqdm = "*"
+regex = "*"
+packaging = "*"
+filelock = "*"
+numpy = "*"
+huggingface-hub = "*"
+safetensors = "*"
+pyyaml = "*"
+aiofiles = "*"
+unstructured = "*"
+python-docx = "*"
+python-pptx = "*"
+docx2txt = "*"
+pandas = "*"
+openpyxl = "*"
+llama-index = "*"
+ollama = "*"
+torch = "*"
+llama-index-llms-ollama = "*"
+llama-index-llms-anthropic =  "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.12.4"
+
+[scripts]
+dev = "uvicorn main:app --port 6190 --reload --env-file .env.local"
+build = """
+pyinstaller --icon=klee-main.ico --additional-hooks-dir=./hooks -p ./.venv \
+--hidden-import=torch \
+--hidden-import=transformers \
+--hidden-import=sentence_transformers \
+--hidden-import=langchain \
+--hidden-import=transformers.models.gemma2.configuration_gemma2 \
+--hidden-import=transformers.models.gemma2 \
+--hidden-import=llama_cpp_python \
+--hiddent-import=llama-index-llms-anthropic \
+--collect-all unstructured \
+--collect-all python-docx \
+--collect-all python-pptx \
+--collect-all docx2txt \
+--collect-all pandas \
+--collect-all openpyxl \
+--collect-all torch \
+--collect-all antoropic \
+-F main.py --clean
+"""
+
+build_dir = """
+pyinstaller --icon=klee-main.ico --additional-hooks-dir=./hooks -p ./.venv \
+--hidden-import=torch \
+--hidden-import=transformers \
+--hidden-import=sentence_transformers \
+--hidden-import=langchain \
+--hidden-import=transformers.models.gemma2.configuration_gemma2 \
+--hidden-import=transformers.models.gemma2 \
+--hidden-import=llama_cpp_python \
+--hidden-import=scipy \
+--hidden-import=llama-index-llms-anthropic \
+--collect-all unstructured \
+--collect-all docx2txt \
+--collect-all openpyxl \
+--collect-all torch \
+--collect-all llama-index-llms-anthropic \
+--upx-dir ./ \
+-D -w main.py --clean --noconfirm
+"""

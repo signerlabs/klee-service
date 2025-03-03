@@ -1,0 +1,9 @@
+name: klee-python-main
+channels:
+  - defaults
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+  - https://repo.anaconda.com/pkgs/msys2
+dependencies:
+  - python=3.12
+prefix: D:\ProgramData\anaconda3\envs\klee-python-main

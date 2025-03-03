@@ -1,0 +1,8 @@
+.history
+.env.local
+**/__pycache__/
+build/
+dist/
+logs/
+.DS_Store
+venv/
