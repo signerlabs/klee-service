@@ -27,6 +27,10 @@ user_home = os.path.expanduser("~")
 # DATABASE_PATH = os.path.join(user_home, 'Library/com.signerlabs.klee/db/klee.sqlite')
 DATABASE_PATH = "C:/Users/Administrator/AppData/Local/com/signer_labs/klee/db/klee.sqlite"
 
+if os.name == "posix":
+    if 'darwin' in platform.system().lower():
+        DATABASE_PATH = os.path.join(user_home, 'Library/com.signerlabs.klee/db/klee.sqlite')
+
 DATABASE_URL = f"sqlite+aiosqlite:///{DATABASE_PATH}"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
