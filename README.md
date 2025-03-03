@@ -44,6 +44,11 @@ Source the virtual environment:
 source venv/bin/activate
 ```
 
+Use the following command to install the package:
+```bash
+pip install -r requirements.txt
+```
+
 ### 3.Add some code to the file
 The file 'venv/Lib/site-packages/llama_index/llms/ollama/base.py' is missing some code.
 You need to add the following code to the file, find method 'def _get_response_token_counts(self, raw_response: dict)' and add the following code:
