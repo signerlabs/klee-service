@@ -252,15 +252,21 @@ async def get_async_session():
 
 
 async def init_db(engine: AsyncEngine):
-    if not os.path.exists(DATABASE_PATH):
+    db_exists = os.path.exists(DATABASE_PATH)
+
+    if not db_exists:
         os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     else:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # await update_table_columns(Note.__tablename__)
-            # await update_table_columns(Knowledge.__tablename__)
+
+    # 只有在数据库已经存在的情况下才更新表结构
+    if db_exists:
+        await update_table_columns(Note.__tablename__)
+        await update_table_columns(Knowledge.__tablename__)
+
 
 async def update_table_columns(table_name: str):
     # 创建元数据对象并反射现有表结构
@@ -271,22 +277,20 @@ async def update_table_columns(table_name: str):
         await conn.run_sync(metadata.reflect)
 
     # 检查表是否存在
-    if table_name not in metadata.tables:
-        raise ValueError(f"Table '{table_name}' does not exist in the database.")
+    if table_name in metadata.tables:
+        # 获取表对象
+        table = metadata.tables[table_name]
 
-    # 获取表对象
-    table = metadata.tables[table_name]
+        # 检查列是否已经存在
+        if 'local_model' not in table.columns:
+            # 使用 ALTER TABLE 添加新列
+            async with engine.begin() as conn:
+                # 使用 text() 包装 SQL 语句
+                stmt = text(f'ALTER TABLE {table_name} ADD COLUMN local_model INTEGER DEFAULT 1')
+                await conn.execute(stmt)
 
-    # 检查列是否已经存在
-    if 'local_model' not in table.columns:
-        # 使用 ALTER TABLE 添加新列
-        async with engine.begin() as conn:
-            # 使用 text() 包装 SQL 语句
-            stmt = text(f'ALTER TABLE {table_name} ADD COLUMN local_model INTEGER DEFAULT 1')
-            await conn.execute(stmt)
-
-        logger.info(f"Column 'local_model' added to table '{table_name}'.")
-    else:
-        logger.info(f"Column 'local_model' already exists in table '{table_name}'.")
+            logger.info(f"Column 'local_model' added to table '{table_name}'.")
+        else:
+            logger.info(f"Column 'local_model' already exists in table '{table_name}'.")
 
 
