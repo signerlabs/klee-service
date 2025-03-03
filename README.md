@@ -11,7 +11,7 @@
 ### 1.Clone the repository
 
 ```bash
-git clone https://github.com/klee-contrib/klee-service.git
+git clone https://github.com/signerlabs/klee-service.git
 ```
 ### 2.Install the dependencies
 
