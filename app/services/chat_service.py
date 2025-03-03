@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 import re
+from dataclasses import asdict
 from datetime import datetime
 
 import httpx
@@ -748,28 +749,9 @@ class ChatService:
             error_message=""
         )
 
-        message_json_obj = {
-            "id": user_message.id,
-            "role": user_message.role,
-            "content": user_message.content,
-            "create_time": user_message.create_time,
-            "create_at": user_message.create_at,
-            "conversation_id": user_message.conversation_id,
-            "status": user_message.status,
-            "error_message": user_message.error_message
-        }
+        message_json_obj = asdict(user_message)
 
-        message_json_rob_obj = {
-            "id": rot_message.id,
-            "role": rot_message.role,
-            # "parent_id": rot_message.parent_id,
-            "content": rot_message.content,
-            "create_time": rot_message.create_time,
-            "create_at": user_message.create_at,
-            "conversation_id": rot_message.conversation_id,
-            "status": rot_message.status,
-            "error_message": rot_message.error_message
-        }
+        message_json_rob_obj = asdict(rot_message)
 
         message_list = []
         message_list_json = []

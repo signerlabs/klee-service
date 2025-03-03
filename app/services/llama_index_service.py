@@ -607,12 +607,12 @@ class LlamaIndexService:
             index = self.build_auto_merging_index(documents=documents, save_dir=f"{KleeSettings.vector_url}default")
             base_retriever = index.as_retriever(
                 # streaming=True,
-                similarity_top_k=6
+                similarity_top_k=12
             )
             retriever = AutoMergingRetriever(
                 base_retriever,
                 index.storage_context,
-                simple_ratio_thresh=0.5,
+                simple_ratio_thresh=0.2,
                 verbose=False,
             )
             retrievers.append(retriever)
@@ -639,8 +639,8 @@ class LlamaIndexService:
 
         qf_retriever = QueryFusionRetriever(
             retrievers,
-            similarity_top_k=6,
-            num_queries=1,  # Set to 1 for now
+            similarity_top_k=12,
+            num_queries=4,  # Set to 1 for now
             use_async=True,
             query_gen_prompt=QUERY_GEN_PROMPT,
         )
