@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+import re
 from datetime import datetime
 
 import httpx
@@ -103,7 +104,9 @@ class ChatService:
                         streaming=False
                     )
                     response = query_engine.query(question)
-                    conversation.title = response.response
+
+                    conversation.title = re.sub(r'<think>.*?</think>', '', response.response, flags=re.DOTALL)
+
                     session.add(conversation)
 
                     return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
@@ -116,7 +119,6 @@ class ChatService:
                     response = query_engine.query(question + language)
                     conversation.title = response.response.replace("\\n", "").strip()
                     session.add(conversation)
-                    await session.commit()
                     return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
             else:
                 if conversation.provider_id == SystemTypeDiffModelType.OPENAI.value \
@@ -151,7 +153,6 @@ class ChatService:
                         response.raise_for_status()  # 如果响应状态不是200，将引发异常
                         conversation.title = response.text
                         session.add(conversation)
-                        await session.commit()
 
                     return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
                 else:
@@ -163,14 +164,12 @@ class ChatService:
                     response = query_engine.query(question)
                     conversation.title = response.response
                     session.add(conversation)
-                    await session.commit()
 
                     return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
 
         except Exception as e:
             logger.error(f"create_conversation_title error:{str(e)}")
-            await session.rollback()
-            return ResponseContent(error_code=-1, message=f"生成标题失败{str(e)}", data={})
+            return ResponseContent(error_code=-1, message=f"Generate title failed, {str(e)}", data={})
 
     @db_transaction
     async def create_conversation(
