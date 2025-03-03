@@ -8,3 +8,4 @@ logs/
 venv/
 __pycache__/
 .venv/
+*.spec

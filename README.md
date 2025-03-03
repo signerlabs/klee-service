@@ -141,7 +141,7 @@ pyinstaller --uac-admin --icon=klee-main.ico  --additional-hooks-dir=./hooks --a
 ### MacOs/Linux
 Use the following command to build the project:
 ```bash
-pyinstaller --uac-admin --icon=klee-main.ico  --additional-hooks-dir=./hooks --add-data "./venv/Lib/site-packages/llama_index/core/agent/react/templates/system_header_template.md:./llama_index/core/agent/react/templates" --hidden-import=pydantic.deprecated.decorator --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext  -D main.py --clean
+pyinstaller --uac-admin --icon=klee-main.ico  --additional-hooks-dir=./hooks --add-data "./venv/lib/python3.12/site-packages/llama_index/core/agent/react/templates/system_header_template.md:./llama_index/core/agent/react/templates" --hidden-import=pydantic.deprecated.decorator --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext  -D main.py --clean
 ```
 
 ## 📖 Technology Stack
