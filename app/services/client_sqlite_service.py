@@ -259,8 +259,8 @@ async def init_db(engine: AsyncEngine):
     else:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            await update_table_columns(Note.__tablename__)
-            await update_table_columns(Knowledge.__tablename__)
+            # await update_table_columns(Note.__tablename__)
+            # await update_table_columns(Knowledge.__tablename__)
 
 async def update_table_columns(table_name: str):
     # 创建元数据对象并反射现有表结构
@@ -282,7 +282,7 @@ async def update_table_columns(table_name: str):
         # 使用 ALTER TABLE 添加新列
         async with engine.begin() as conn:
             # 使用 text() 包装 SQL 语句
-            stmt = text(f'ALTER TABLE {table_name} ADD COLUMN local_model BOOLEAN DEFAULT TRUE')
+            stmt = text(f'ALTER TABLE {table_name} ADD COLUMN local_model INTEGER DEFAULT 1')
             await conn.execute(stmt)
 
         logger.info(f"Column 'local_model' added to table '{table_name}'.")
