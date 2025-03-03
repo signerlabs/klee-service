@@ -138,7 +138,7 @@ Use the following command to build the project:
 pyinstaller --uac-admin --additional-hooks-dir=./hooks --add-data "./venv/Lib/site-packages/llama_index/core/agent/react/templates/system_header_template.md;./llama_index/core/agent/react/templates" --hidden-import=pydantic.deprecated.decorator --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext  -D main.py --clean
 ```
 
-Before running the executable file, you need to copy the 'all-MiniLM-L6-v2' folder to the dist directory, and then use the following command to run the executable file:
+Before running the executable file, you need to copy the 'all-MiniLM-L6-v2' folder and 'tiktoken_encode' to the dist directory, and then use the following command to run the executable file:
 ```bash
 main.exe
 ```
