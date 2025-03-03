@@ -749,7 +749,7 @@ class LlamaIndexService:
                 model_name='',
                 model_path='',
                 provider_id='',
-                local_mode=False
+                local_mode=True
             )
             session.add(global_settings)
             try:
@@ -758,7 +758,7 @@ class LlamaIndexService:
                 logger.error(f"Init global model settings error: {e}")
                 session.rollback()
 
-            KleeSettings.local_mode = False
+            KleeSettings.local_mode = True
             KleeSettings.model_id = None
             KleeSettings.model_name = None
             KleeSettings.model_path = None
