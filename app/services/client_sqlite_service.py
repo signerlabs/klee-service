@@ -8,8 +8,9 @@ from typing import Type
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import select, update
+from sqlalchemy import select, update, MetaData, Table, Column, Boolean, text
 from app.model.BackgroundTask import BackgroundTask, TaskStatus, TaskType
 import time
 import aiosqlite
@@ -258,24 +259,34 @@ async def init_db(engine: AsyncEngine):
     else:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        await update_table_columns(Note.__tablename__)
-        await update_table_columns(Knowledge.__tablename__)
+            await update_table_columns(Note.__tablename__)
+            await update_table_columns(Knowledge.__tablename__)
 
 async def update_table_columns(table_name: str):
-    table_name = Note.__tablename__
-    if table_name in metadata.tables:
-        table = metadata.tables[table_name]
-    else:
+    # 创建元数据对象并反射现有表结构
+    metadata = MetaData()
+
+    # 使用 run_sync 将异步引擎转换为同步引擎
+    async with engine.begin() as conn:
+        await conn.run_sync(metadata.reflect)
+
+    # 检查表是否存在
+    if table_name not in metadata.tables:
         raise ValueError(f"Table '{table_name}' does not exist in the database.")
+
+    # 获取表对象
+    table = metadata.tables[table_name]
 
     # 检查列是否已经存在
     if 'local_model' not in table.columns:
-        # 添加新列
-        new_column = Column('local_model', Boolean, default=True)
-        new_column.create(table)
+        # 使用 ALTER TABLE 添加新列
+        async with engine.begin() as conn:
+            # 使用 text() 包装 SQL 语句
+            stmt = text(f'ALTER TABLE {table_name} ADD COLUMN local_model BOOLEAN DEFAULT TRUE')
+            await conn.execute(stmt)
 
-        print(f"Column 'local_model' added to table '{table_name}'.")
+        logger.info(f"Column 'local_model' added to table '{table_name}'.")
     else:
-        print(f"Column 'local_model' already exists in table '{table_name}'.")
+        logger.info(f"Column 'local_model' already exists in table '{table_name}'.")
 
 
