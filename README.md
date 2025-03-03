@@ -1,14 +1,12 @@
 # klee-service
 
 ## System Requirements
-___
 - Windows 7+ or higher
 - MacOS 10.9+ or higher
 - Python 3.12.4+
 - pip 23.2.1+
 
 ## Installation
-___
 
 ### 1.Clone the repository
 
@@ -79,7 +77,6 @@ pip install -r requirements.txt
 ```
 
 ## Usage
-___
 
 Use the following command to run the server:
 ```bash
@@ -97,7 +94,6 @@ python app.py --port 6191
 ```
 
 ## Configuration
-___
 
 If you want to use the OpenAI API or Llama Cloud API, you need to provide your API key. 
 Create a .env file in the root directory of the project and add the following content:
@@ -108,7 +104,6 @@ LLAMA_CLOUD_API_KEY="your_llama_cloud_api_key"
 ```
 
 ## Build
-___
 ### Windows
 Use the following command to build the project:
 ```bash
@@ -122,7 +117,6 @@ pyinstaller --uac-admin --icon=klee-main.ico  --additional-hooks-dir=./hooks --a
 ```
 
 ## Technologies
-___
 - Python
 - LlamaIndex
 - Ollama
