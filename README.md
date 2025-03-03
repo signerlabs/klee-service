@@ -73,12 +73,12 @@ cd klee-service
     pip install -r requirements.txt
     ```
 
-### 5. Add code to the file
+### 5. Change source code
 - Window: 'venv/Lib/site-packages/llama_index/llms/ollama/base.py' is missing some code.
 
 - MacOS: 'venv/lib/python3.12/site-packages/llama_index/llms/ollama/base.py'
 
-You need to add the following code to the file, find method 'def _get_response_token_counts(self, raw_response: dict)' and add the following code:
+Find method 'def _get_response_token_counts(self, raw_response: dict)' and change with the following code:
 ```python
     def _get_response_token_counts(self, raw_response: dict) -> dict:
         """Get the token usage reported by the response."""
@@ -104,7 +104,7 @@ You need to add the following code to the file, find method 'def _get_response_t
 
 ### 6. Start the service
 
-Use the following command to run the server:
+Use the following command to start the service:
 ```bash
 python main.py
 ```
@@ -131,7 +131,7 @@ OPENAI_KEY="your_openai_key"
 LLAMA_CLOUD_API_KEY="your_llama_cloud_api_key"
 ```
 
-## 🏠 Build
+## 🏠 Build - Optional
 ### Windows
 Use the following command to build the project:
 ```bash
@@ -146,9 +146,9 @@ pyinstaller --uac-admin --icon=klee-main.ico  --additional-hooks-dir=./hooks --a
 
 ## 📖 Technology Stack
 
-- Python
-- LlamaIndex
-- Ollama
-- Sqlalchemy
-- FastAPI
+- <u>[Python](https://kleedesktop.com/)</u>
+- <u>[LlamaIndex](https://www.llamaindex.ai/)</u>
+- <u>[Ollama](https://ollama.com/)</u>
+- <u>[Sqlalchemy](https://www.sqlalchemy.org/)</u>
+- <u>[FastAPI](https://fastapi.tiangolo.com/)</u>
 
