@@ -30,7 +30,9 @@ DATABASE_PATH = "C:/Users/Administrator/AppData/Local/com/signer_labs/klee/db/kl
 
 if os.name == "posix":
     if 'darwin' in platform.system().lower():
-        DATABASE_PATH = os.path.join(user_home, 'Library/com.signerlabs.klee/db/klee.sqlite')
+        DATABASE_PATH = os.path.join(user_home, 'Library/Application Support/com.signerlabs.klee/db/klee.sqlite')
+        
+logger.info(f"Database URL: {DATABASE_PATH}")
 
 DATABASE_URL = f"sqlite+aiosqlite:///{DATABASE_PATH}"
 
