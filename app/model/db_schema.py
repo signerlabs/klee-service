@@ -90,7 +90,7 @@ CREATE_TABLE_STATEMENTS = [
         create_at REAL,
         update_at REAL,
         delete_at REAL,
-        local_mode INTEGER NOT NULL DEFAULT 0
+        local_mode INTEGER NOT NULL DEFAULT 1
     )
     """,
     """
@@ -161,7 +161,7 @@ CREATE_TABLE_STATEMENTS = [
         delete_at REAL NOT NULL DEFAULT 0,
         html_content TEXT NOT NULL DEFAULT '',
         embedded_content TEXT NOT NULL DEFAULT '',
-        local_mode INTEGER NOT NULL DEFAULT 0
+        local_mode INTEGER NOT NULL DEFAULT 1
     )
     """
 ]

@@ -16,6 +16,8 @@ import aiosqlite
 from app.model.Chat import ChatMessage, ChatConversation
 # import logging
 from sqlalchemy.exc import SQLAlchemyError
+
+from app.model.knowledge import Knowledge
 from app.model.note import Note
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -256,3 +258,24 @@ async def init_db(engine: AsyncEngine):
     else:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        await update_table_columns(Note.__tablename__)
+        await update_table_columns(Knowledge.__tablename__)
+
+async def update_table_columns(table_name: str):
+    table_name = Note.__tablename__
+    if table_name in metadata.tables:
+        table = metadata.tables[table_name]
+    else:
+        raise ValueError(f"Table '{table_name}' does not exist in the database.")
+
+    # 检查列是否已经存在
+    if 'local_model' not in table.columns:
+        # 添加新列
+        new_column = Column('local_model', Boolean, default=True)
+        new_column.create(table)
+
+        print(f"Column 'local_model' added to table '{table_name}'.")
+    else:
+        print(f"Column 'local_model' already exists in table '{table_name}'.")
+
+
