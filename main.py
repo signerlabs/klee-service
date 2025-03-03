@@ -111,6 +111,8 @@ def main():
     if config.llama_cloud_api_key is not None:
         KleeSettings.async_llama_cloud = AsyncLlamaCloud(token=config.llama_cloud_api_key)
 
+    KleeSettings.local_mode = True
+
     port = args.port
 
     multiprocessing.freeze_support()
