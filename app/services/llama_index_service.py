@@ -10,18 +10,10 @@ import yaml
 # datetime
 from datetime import datetime
 
-from llama_index.core.instrumentation.events import rerank
 from llama_index.core.response_synthesizers import ResponseMode
 from llama_index.llms.anthropic import Anthropic
 
 from llama_index.llms.deepseek import DeepSeek
-
-from llama_index.embeddings.huggingface import (
-    HuggingFaceEmbedding,
-)
-
-
-from llama_index.core.utils import get_cache_dir
 
 from llama_index.core.node_parser import (
     HierarchicalNodeParser,
@@ -37,8 +29,6 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 
 from llama_index.core.settings import Settings as llamaSettings
 
-from llama_index.core.schema import QueryBundle
-
 from llama_index.llms.ollama import Ollama
 from app.model.knowledge import File
 
@@ -47,7 +37,6 @@ from pathlib import Path
 import uuid
 
 from app.services.client_sqlite_service import db_transaction
-from app.model.base_config import BaseConfig
 
 from app.model.knowledge import Knowledge
 from app.common.LlamaEnum import (
@@ -75,10 +64,10 @@ from app.model.note import Note
 from app.model.global_settings import GlobalSettings
 
 # 配置日志记录
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 class LlamaIndexError(Exception):
     """Base exception class for LlamaIndex service errors"""
@@ -264,10 +253,6 @@ class LlamaIndexService:
 
             llamaSettings.embed_model = f"local:{SystemEmbedUrl.MAC_PATH.value}all-MiniLM-L6-v2"
 
-        with open(KleeSettings.config_url, 'r') as file:
-            KleeSettings.data = yaml.safe_load(file)
-            if KleeSettings.data.get('openai_api_key') is not None:
-                os.environ["OPENAI_API_KEY"] = KleeSettings.data.get("openai_api_key")
         KleeSettings.center_url = f"https://xltwffswqvowersvchkj.supabase.co/"
 
     def load_text_document(
@@ -432,7 +417,7 @@ class LlamaIndexService:
                 base_retriever,
                 index.storage_context,
                 simple_ratio_thresh=0.5,
-                verbose=False,
+                verbose=True,
             )
             
             query_engine = RetrieverQueryEngine.from_args(
@@ -570,24 +555,24 @@ class LlamaIndexService:
         except Exception as e:
             raise Exception(e)
 
-    async def choose_which_embed_model(
-            self,
-            embed_model_path: str,
-    ) -> None:
-        """
-            Choose which embed model of llama settings for global
-        Args:
-            embed_model_path: path of embed model
-        Returns: None
-        """
-        if embed_model_path is not None:
-            cache_folder = os.path.join(get_cache_dir(), "models")
-            os.makedirs(cache_folder, exist_ok=True)
-            embed_model = HuggingFaceEmbedding(
-                model_name="local:".join(embed_model_path), cache_folder=cache_folder
-            )
-            llamaSettings.embed_model = embed_model
-            KleeSettings.embed_model_path = "local:".join(embed_model_path)
+    # async def choose_which_embed_model(
+    #         self,
+    #         embed_model_path: str,
+    # ) -> None:
+    #     """
+    #         Choose which embed model of llama settings for global
+    #     Args:
+    #         embed_model_path: path of embed model
+    #     Returns: None
+    #     """
+    #     if embed_model_path is not None:
+    #         cache_folder = os.path.join(get_cache_dir(), "models")
+    #         os.makedirs(cache_folder, exist_ok=True)
+    #         embed_model = HuggingFaceEmbedding(
+    #             model_name="local:".join(embed_model_path), cache_folder=cache_folder
+    #         )
+    #         llamaSettings.embed_model = embed_model
+    #         KleeSettings.embed_model_path = "local:".join(embed_model_path)
 
     async def import_exist_dir(
             self,
@@ -677,7 +662,7 @@ class LlamaIndexService:
                     base_retriever,
                     index.storage_context,
                     simple_ratio_thresh=0.5,
-                    verbose=False,
+                    verbose=True,
                 )
                 retrievers.append(retriever)
 
@@ -711,10 +696,11 @@ class LlamaIndexService:
                         base_retriever,
                         index.storage_context,
                         simple_ratio_thresh=0.2,
-                        verbose=False,
+                        verbose=True,
                     )
                     retrievers.append(retriever)
 
+        # 文本问答模板
         text_qa_prompt = """
                "Context information is below.\n"
                "---------------------\n"
@@ -726,6 +712,7 @@ class LlamaIndexService:
                "Answer: "
            """
 
+        # 精炼改进提示模板
         refine_prompt = """
                "The original query is as follows: {query_str}\n"
                "We have provided an existing answer: {existing_answer}\n"
@@ -740,6 +727,7 @@ class LlamaIndexService:
                "Refined Answer: "
            """
 
+        # 总结提示模板
         summary_prompt = """
                "Context information from multiple sources is below.\n"
                "---------------------\n"
@@ -755,23 +743,26 @@ class LlamaIndexService:
             documents = self.load_text_document(f"{KleeSettings.temp_file_url}default")
             index = self.build_auto_merging_index(documents=documents, save_dir=f"{KleeSettings.vector_url}default")
             base_retriever = index.as_retriever(
-                # streaming=True,
                 similarity_top_k=12
             )
             retriever = AutoMergingRetriever(
                 base_retriever,
                 index.storage_context,
                 simple_ratio_thresh=0.2,
-                verbose=False,
+                verbose=True,
             )
             retrievers.append(retriever)
 
+            # 设置问答模板不需要根据上下文内容
             text_qa_prompt = """
                 "if the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content. \n"
                 "answer the query.\n"
                 "Query: {query_str}\n"
             """
 
+            print(f"当前的QA模板内容为: {text_qa_prompt} \n")
+
+            # 总结提示模板
             summary_prompt = """
                 "if the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content. \n"
                 "answer the query.\n"
@@ -789,7 +780,7 @@ class LlamaIndexService:
         qf_retriever = QueryFusionRetriever(
             retrievers,
             similarity_top_k=12,
-            num_queries=4,  # Set to 1 for now
+            num_queries=4,
             use_async=True,
             query_gen_prompt=QUERY_GEN_PROMPT,
         )
@@ -861,34 +852,4 @@ class LlamaIndexService:
             KleeSettings.model_name = result.model_name
             KleeSettings.model_path = result.model_path
             KleeSettings.provider_id = result.provider_id
-        logger.info(f"Init global model settings: {KleeSettings.local_mode}, {KleeSettings.model_id}, {KleeSettings.model_name}, {KleeSettings.model_path}, {KleeSettings.provider_id}")
-
-    @db_transaction
-    async def update_global_model_settings(
-            self,
-            local_mode: bool,
-            model_id: str,
-            model_name: str,
-            model_path: str,
-            provider_id: str,
-            session=None
-    ):
-        stmt = select(GlobalSettings)
-        result = await session.execute(stmt)
-        result = result.scalars().one_or_none()
-
-        result.local_mode = local_mode
-        result.model_id = model_id
-        result.model_name = model_name
-        result.model_path = model_path
-        result.provider_id = provider_id
-        result.update_at = datetime.now().timestamp()
-
-        try:
-            session.commit()
-            session.refresh(result)
-        except Exception as e:
-            logger.error(f"Init global model settings error: {e}")
-            session.rollback()
-
 

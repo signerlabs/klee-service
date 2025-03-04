@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 
 class LoggingConfig:
     DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    DEFAULT_LEVEL = logging.INFO
+    DEFAULT_LEVEL = logging.DEBUG
     MAX_BYTES = 10 * 1024 * 1024  # 10MB
     BACKUP_COUNT = 5
 
@@ -20,7 +20,7 @@ class LoggingConfig:
         self.log_file = log_file
         self.loggers_to_silence = [
             'aiosqlite',
-            'sentence_transformers',
+            # 'sentence_transformers',
             'sqlalchemy.engine',
             'urllib3.connectionpool',
             'asyncio'

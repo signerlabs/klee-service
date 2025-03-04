@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Any
+from typing import Dict, Any
 import datetime
 import json
 import logging
@@ -219,19 +219,6 @@ class BaseService:
             result = await session.execute(stmt)
             conversation = result.scalars().first()
 
-            if llama_request.provider_id == SystemTypeDiffModelType.KLEE.value and \
-                    not os.path.exists(f"{KleeSettings.llm_path}{str(llama_request.model_id).lower()}.gguf"):
-                return ResponseContent(error_code=-1, message="unexist model", data={})
-
-            if llama_request.provider_id == SystemTypeDiffModelType.OLLAMA.value:
-                try:
-                    with requests.get("http://localhost:11434/api/tags") as response:
-                        response.raise_for_status()
-                        response.encoding = "utf-8"
-                except Exception as e:
-                    logging.error(f"Ollama not installed or not started, {str(e)}")
-                    return ResponseContent(error_code=-1, message=f"Ollama not installed or not started", data={})
-
             if conversation.model_id != llama_request.model_id:
                 self.llama_index_service.release_memory()
             elif llama_request.model_path != conversation.model_path:
@@ -257,9 +244,6 @@ class BaseService:
             stmt_global = select(GlobalSettings)
             result_global = await session.execute(stmt_global)
             global_settings = result_global.scalars().first()
-
-            print(
-                f"global settings info: {global_settings.provider_id}, {global_settings.model_id}, {global_settings.model_path}, {global_settings.model_name}, {global_settings.local_mode}")
 
             if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value and conversation.model_id != global_settings.model_id:
                 if global_settings.provider_id == SystemTypeDiffModelType.OLLAMA.value:
@@ -326,30 +310,3 @@ class BaseService:
 
     async def get_status(self):
         return ResponseContent(error_code=0, message="Service is running", data={})
-
-    async def _check_ollama_status(self) -> bool:
-        """检查Ollama服务状态"""
-        try:
-            response = requests.get("http://localhost:11434/api/tags")
-            return response.status_code == 200
-        except Exception as e:
-            logger.error(f"Ollama service check failed: {str(e)}")
-            return False
-
-    async def _check_model_availability(
-        self,
-        provider_id: str,
-        model_id: str
-    ) -> tuple[bool, str]:
-        """检查模型是否可用"""
-        if provider_id == SystemTypeDiffModelType.KLEE.value:
-            model_path = f"{KleeSettings.llm_path}{str(model_id).lower()}.gguf"
-            if not os.path.exists(model_path):
-                return False, "Model file does not exist"
-        
-        elif provider_id == SystemTypeDiffModelType.OLLAMA.value:
-            if not await self._check_ollama_status():
-                return False, "Ollama service is not available"
-
-        return True, ""
-
