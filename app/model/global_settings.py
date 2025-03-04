@@ -13,18 +13,18 @@ class GlobalSettings(Base):
     id: str = Column(
         String, primary_key=True, default=lambda: str(uuid.uuid4()),
         index=True
-    )  # 小写的uuid
+    )  # UUID in lowercase
 
-    local_mode: bool = Column(Boolean, default=False)  # 是否开启本地模式
-    model_name: str = Column(String, default='')  # 模型名称
-    model_path: str = Column(String, default='')  # 模型路径
-    model_id: str = Column(String, default='')  # 模型ID
-    provider_id: str = Column(String, default='')  # 服务商ID
-    create_at = Column(Float)  # 创建时间
-    update_at = Column(Float)  # 更新时间
+    local_mode: bool = Column(Boolean, default=False)  # Enable/disable local mode
+    model_name: str = Column(String, default='')  # Model name
+    model_path: str = Column(String, default='')  # Model file path
+    model_id: str = Column(String, default='')  # Model ID
+    provider_id: str = Column(String, default='')  # Service provider ID
+    create_at = Column(Float)  # Creation timestamp
+    update_at = Column(Float)  # Last update timestamp
 
     def __init__(self, **kwargs):
         try:
             super().__init__(**kwargs)
         except Exception as e:
-            raise ValueError(f"初始化 GlobalSettings 失败: {e}")
+            raise ValueError(f"Failed to initialize GlobalSettings: {e}")

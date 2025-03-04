@@ -25,25 +25,58 @@ class ChatController:
             Authorization: str = Header(None),
             request: Request = Request
     ):
-        return await self.chat_service.create_conversation_title(conversation_id=conversation_id,
-                                                                 Authorization=Authorization, request=request)
+        """
+        Create or update a conversation title
+        Args:
+            conversation_id: ID of the conversation
+            Authorization: Authorization header
+            request: Request object
+        Returns:
+            Response containing updated conversation data
+        """
+        return await self.chat_service.create_conversation_title(
+            conversation_id=conversation_id,
+            Authorization=Authorization,
+            request=request
+        )
 
     async def create_conversation(
             self,
             llama_request: LlamaConversationRequest
     ):
+        """
+        Create a new conversation
+        Args:
+            llama_request: Conversation creation request data
+        Returns:
+            Response containing created conversation data
+        """
         return await self.chat_service.create_conversation(llama_request=llama_request)
 
     async def delete_conversation(
             self,
             conversation_id: str
     ):
+        """
+        Delete a conversation
+        Args:
+            conversation_id: ID of the conversation to delete
+        Returns:
+            Response indicating success/failure
+        """
         return await self.chat_service.delete_conversation(conversation_id=conversation_id)
 
     async def delete_message(
             self,
             message_id: str,
     ):
+        """
+        Delete a message
+        Args:
+            message_id: ID of the message to delete
+        Returns:
+            Response indicating success/failure
+        """
         return await self.chat_service.delete_message(message_id=message_id)
 
     async def update_conversation(
@@ -51,6 +84,14 @@ class ChatController:
             conversation_id: str,
             request: LlamaConversationRequest
     ):
+        """
+        Update conversation details
+        Args:
+            conversation_id: ID of the conversation to update
+            request: Updated conversation data
+        Returns:
+            Response containing updated conversation data
+        """
         return await self.chat_service.update_conversation(conversation_id=conversation_id, request=request)
 
     async def llama_get_conversation_message(
@@ -174,7 +215,12 @@ async def get_conversation_messages(
         conversation_controller: ChatController = Depends(ChatController)
 ):
     """
-    待定处理
+    Retrieve all messages for a specific conversation
+    Args:
+        conversation_id: ID of the conversation
+        conversation_controller: ChatController instance
+    Returns:
+        Response containing conversation messages
     """
     return await conversation_controller.get_conversation_messages(conversation_id=conversation_id)
 

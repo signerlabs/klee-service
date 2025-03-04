@@ -399,7 +399,7 @@ class LlamaIndexService:
             streaming=True,
             rerank_top_n=rerank_top_n,
             # text_qa_template=PromptTemplate(sim_template)
-            # node_postprocessors=[rerank]
+            node_postprocessors=[rerank]
         )
         return auto_merging_engine
 
@@ -537,12 +537,12 @@ class LlamaIndexService:
                 documents = self.load_text_document(f"{KleeSettings.temp_file_url}{n}")
                 index = self.build_auto_merging_index(documents, save_dir=f"{KleeSettings.vector_url}{n}")
                 base_retriever = index.as_retriever(
-                    similarity_top_k=6
+                    similarity_top_k=12
                 )
                 retriever = AutoMergingRetriever(
                     base_retriever,
                     index.storage_context,
-                    simple_ratio_thresh=0.5,
+                    simple_ratio_thresh=0.2,
                     verbose=True,
                 )
 
@@ -561,7 +561,7 @@ class LlamaIndexService:
                     retriever = AutoMergingRetriever(
                         base_retriever,
                         index.storage_context,
-                        simple_ratio_thresh=0.5,
+                        simple_ratio_thresh=0.2,
                         verbose=False,
                     )
                     retrievers.append(retriever)
