@@ -10,6 +10,7 @@ import yaml
 # datetime
 from datetime import datetime
 
+from llama_index.core.instrumentation.events import rerank
 from llama_index.core.response_synthesizers import ResponseMode
 from llama_index.llms.anthropic import Anthropic
 
@@ -399,7 +400,7 @@ class LlamaIndexService:
             streaming=True,
             rerank_top_n=rerank_top_n,
             # text_qa_template=PromptTemplate(sim_template)
-            node_postprocessors=[rerank]
+            # node_postprocessors=[rerank]
         )
         return auto_merging_engine
 
