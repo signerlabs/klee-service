@@ -38,12 +38,12 @@ class KnowledgeService:
             session=None
     ) -> ResponseContent:
         """
-        Get all knowledge database
+        Get all knowledge database entries
         Args:
-            keyword: keyword
-            session: database session
+            keyword: Optional search keyword
+            session: Database session
         Returns:
-            ResponseContent: response content
+            ResponseContent: Response containing knowledge list
         """
         try:
             stmt = select(Knowledge).where(Knowledge.parent_id == '')
@@ -67,9 +67,9 @@ class KnowledgeService:
                 for k in knowledge_list
             ]
 
-            return ResponseContent(error_code=0, message="Get all knowledge database successfully", data=knowledge_data)
+            return ResponseContent(error_code=0, message="Successfully retrieved all knowledge entries", data=knowledge_data)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Get all knowledge database failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve knowledge entries: {str(e)}")
 
     @db_transaction
     async def get_knowledge(
@@ -78,13 +78,12 @@ class KnowledgeService:
             session=None
     ):
         """
-        Get knowledge database
+        Get a specific knowledge entry
         Args:
-            knowledge_id: knowledge id
-            session: database session
-
+            knowledge_id: ID of the knowledge entry
+            session: Database session
         Returns:
-            ResponseContent
+            ResponseContent: Response containing knowledge data
         """
         try:
             stmt = select(Knowledge).where(Knowledge.id == knowledge_id)
@@ -92,13 +91,13 @@ class KnowledgeService:
             knowledge = result.scalars().first()
 
             if not knowledge:
-                raise HTTPException(status_code=404, detail="Database knowledge not found")
+                raise HTTPException(status_code=404, detail="Knowledge entry not found")
 
             knowledge_dict = asdict(knowledge)
 
-            return ResponseContent(error_code=0, message="Get knowledge database successfully", data=knowledge_dict)
+            return ResponseContent(error_code=0, message="Successfully retrieved knowledge entry", data=knowledge_dict)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Get knowledge database failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to retrieve knowledge entry: {str(e)}")
 
     @db_transaction
     async def get_all_files(
@@ -106,6 +105,14 @@ class KnowledgeService:
             knowledge_id: str,
             session=None
     ):
+        """
+        Get all files associated with a knowledge entry
+        Args:
+            knowledge_id: ID of the knowledge entry
+            session: Database session
+        Returns:
+            ResponseContent: Response containing file list
+        """
         try:
             stmt = select(File).where(File.knowledgeId == knowledge_id)
             result = await session.execute(stmt)
@@ -113,7 +120,7 @@ class KnowledgeService:
 
             if KleeSettings.local_mode is True:
                 return_files = [self.file_to_dict(k) for k in files]
-                return ResponseContent(error_code=0, message="Get knowledge database successfully", data=return_files)
+                return ResponseContent(error_code=0, message="Successfully retrieved files", data=return_files)
             else:
                 return_files = []
                 for file in files:
@@ -131,10 +138,10 @@ class KnowledgeService:
                         "knowledgeId": file.knowledgeId
                     }
                     return_files.append(return_file)
-                return ResponseContent(error_code=0, message="Get knowledge database successfully", data=return_files)
+                return ResponseContent(error_code=0, message="Successfully retrieved files", data=return_files)
 
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve files: {str(e)}")
 
     @db_transaction
     async def create_knowledge(
@@ -142,6 +149,14 @@ class KnowledgeService:
             knowledge: KnowledgeCreate,
             session=None
     ):
+        """
+        Create a new knowledge entry
+        Args:
+            knowledge: Knowledge creation data
+            session: Database session
+        Returns:
+            ResponseContent: Response containing created knowledge data
+        """
         try:
             new_knowledge = Knowledge(
                 id=str(uuid.uuid4()),
@@ -172,11 +187,10 @@ class KnowledgeService:
                     file.write("")
 
             knowledge_response = asdict(new_knowledge)
-            return ResponseContent(error_code=0, message="Create knowledge database successfully",
-                                   data=knowledge_response)
+            return ResponseContent(error_code=0, message="Successfully created knowledge entry", data=knowledge_response)
         except Exception as e:
             logger.error(f"Create knowledge error: {e}")
-            raise HTTPException(status_code=500, detail=f"Create knowledge database failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to create knowledge entry: {str(e)}")
 
     @db_transaction
     async def update_knowledge(
@@ -219,13 +233,12 @@ class KnowledgeService:
             session=None
     ):
         """
-        Delete knowledge database
+        Delete a knowledge entry and its associated files
         Args:
-            knowledge_id: knowledge id
-            session: database session
-
+            knowledge_id: ID of the knowledge entry to delete
+            session: Database session
         Returns:
-            ResponseContent
+            ResponseContent: Response indicating success/failure
         """
         try:
             stmt = select(Knowledge).where(Knowledge.id == knowledge_id)
@@ -233,7 +246,7 @@ class KnowledgeService:
             knowledge = result.scalar_one_or_none()
 
             if not knowledge:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Database knowledge not found")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge entry not found")
 
             await session.delete(knowledge)
 
@@ -244,9 +257,9 @@ class KnowledgeService:
                 for file in files:
                     await self.llama_cloud_file_service.delete_file(file_id=file.id)
 
-            return ResponseContent(error_code=0, message="Delete knowledge database successfully", data=None)
+            return ResponseContent(error_code=0, message="Successfully deleted knowledge entry", data=None)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Delete knowledge database failed: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete knowledge entry: {str(e)}")
 
     @db_transaction
     async def refresh_knowledge(
@@ -358,6 +371,15 @@ class KnowledgeService:
             file_import: LLamaFileImportRequest,
             session=None
     ):
+        """
+        Import knowledge from files
+        Args:
+            knowledge_id: Target knowledge entry ID
+            file_import: File import request data
+            session: Database session
+        Returns:
+            ResponseContent: Response indicating success/failure
+        """
         try:
             if KleeSettings.local_mode is True:
                 select_stmt = select(File).where(File.knowledgeId == knowledge_id)
@@ -377,9 +399,9 @@ class KnowledgeService:
             else:
                 await self.import_exist_dir_cloud(knowledge_id=knowledge_id, dir_path=file_import.path, session=session)
 
-            return ResponseContent(error_code=0, message="Import knowledge database successfully", data={})
+            return ResponseContent(error_code=0, message="Successfully imported knowledge", data={})
         except Exception as e:
-            return ResponseContent(error_code=-1, message=f"Import knowledge database failed, {str(e)}", data={})
+            return ResponseContent(error_code=-1, message=f"Failed to import knowledge: {str(e)}", data={})
 
     async def import_exist_dir_cloud(
             self,
@@ -387,44 +409,61 @@ class KnowledgeService:
             dir_path,
             session
     ):
+        """
+        Import files from directory to cloud storage
+        
+        Args:
+            knowledge_id: Target knowledge ID
+            dir_path: Source directory path
+            session: Database session
+            
+        Raises:
+            Exception: If import fails
+        """
         try:
             directory_path = Path(dir_path)
-            path_list = []
+            files_to_add = []
 
+            # Get knowledge data
             stmt = select(Knowledge).where(Knowledge.id == knowledge_id)
             result = await session.execute(stmt)
             knowledge_data = result.scalars().first()
 
+            if not knowledge_data:
+                raise ValueError(f"Knowledge with ID {knowledge_id} not found")
+
+            # Process files
             for file in directory_path.rglob('*'):
-                if file.is_file():
-                    file_path = str(file)
-                    title = ""
-                    if KleeSettings.os_type == SystemTypeDiff.WIN.value:
-                        title = file_path.split("\\")[-1]
-                    elif KleeSettings.os_type == SystemTypeDiff.MAC.value:
-                        title = file_path.split("/")[-1]
+                if not file.is_file() or file.name == '.DS_Store':
+                    continue
+                    
+                file_path = str(file)
+                title = file.name
+                file_size = os.path.getsize(file_path)
 
-                    if file_path.find("DS_Store") != -1:
-                        continue
-                    cloud_file = await self.llama_cloud_file_service.upload_file(file_path=file_path)
+                # Upload file to cloud
+                cloud_file = await self.llama_cloud_file_service.upload_file(file_path=file_path)
 
-                    knowledge = File(
-                        id=cloud_file.id,
-                        path=file_path,
-                        name=title,
-                        size=os.path.getsize(file_path),
-                        knowledgeId=knowledge_data.id,
-                        os_mtime=datetime.now().timestamp(),
-                        create_at=datetime.now().timestamp(),
-                        update_at=datetime.now().timestamp()
-                    )
-                    path_list.append(knowledge)
-            session.add_all(path_list)
+                # Create file record
+                knowledge_file = File(
+                    id=cloud_file.id,
+                    path=file_path,
+                    name=title,
+                    size=file_size,
+                    knowledgeId=knowledge_data.id,
+                    os_mtime=datetime.now().timestamp(),
+                    create_at=datetime.now().timestamp(),
+                    update_at=datetime.now().timestamp()
+                )
+                files_to_add.append(knowledge_file)
+
+            # Bulk insert files
+            if files_to_add:
+                session.add_all(files_to_add)
+
         except Exception as e:
-            logger.error(f"Import exist dir cloud error: {e}")
-            raise Exception(
-                "error"
-            )
+            logger.error(f"Failed to import directory to cloud: {str(e)}")
+            raise Exception(f"Failed to import files: {str(e)}")
 
     @db_transaction
     async def delete_file(
@@ -520,7 +559,7 @@ class KnowledgeService:
             return ResponseContent(error_code=0, message="Upload file successfully", data={})
         except Exception as e:
             logger.error(f"Upload file error: {e}")
-            return ResponseContent(error_code=-1, message=f"Upload file failed,{str(e)}", data={})
+            return ResponseContent(error_code=-1, message=f"Failed to upload file: {str(e)}", data={})
 
     @db_transaction
     async def add_file_to_knowledge(
@@ -570,4 +609,15 @@ class KnowledgeService:
             src: str,
             dest: str
     ):
-        shutil.copy(src, dest)
+        """
+        Copy file from source to destination
+        
+        Args:
+            src: Source file path
+            dest: Destination file path
+        """
+        try:
+            shutil.copy(src, dest)
+        except Exception as e:
+            logger.error(f"Failed to copy file from {src} to {dest}: {str(e)}")
+            raise

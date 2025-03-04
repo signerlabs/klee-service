@@ -47,24 +47,31 @@ class ChatService:
             request: Request = Request,
             session = None
     ):
+        """
+        Create or update conversation title
+        Args:
+            conversation_id: ID of the conversation
+            Authorization: Authorization header
+            request: Request object
+            session: Database session
+        Returns:
+            ResponseContent: Response containing conversation data
+        """
         try:
             stmt = select(Llama_conversation).where(Llama_conversation.id == conversation_id)
             results = await session.execute(stmt)
             conversation = results.scalars().one_or_none()
 
             if conversation is None:
-                return ResponseContent(error_code=-1, message=f"Conversation not found,{str(conversation_id)}", data={})
+                return ResponseContent(error_code=-1, message=f"Conversation not found: {conversation_id}", data={})
 
             msg_stmt = select(Llama_chat_message).order_by(Llama_chat_message.create_time.asc()).limit(2).where(
                 Llama_chat_message.conversation_id == conversation_id)
             results = await session.execute(msg_stmt)
             msg_list = results.scalars().all()
 
-            logger.info(f"conversation:{conversation}")
-            logger.info(f"msg_list:{msg_list}")
-
-            if msg_list is None or len(msg_list) == 0:
-                return ResponseContent(error_code=-1, message=f"Not enough messages in conversation,{str(conversation_id)}")
+            if not msg_list:
+                return ResponseContent(error_code=-1, message=f"Not enough messages in conversation: {conversation_id}")
 
             msg_content = ""
             for msg in msg_list:
@@ -75,9 +82,9 @@ class ChatService:
 
             language = ""
             if conversation.language_id == "zh":
-                language = f"用中文为我生成标题"
+                language = "Generate title in Chinese"
             elif conversation.language_id == "en":
-                language = f"Please generate a title in English"
+                language = "Generate title in English"
             elif conversation.language_id == "auto":
                 language = ""
 
@@ -170,7 +177,7 @@ class ChatService:
 
         except Exception as e:
             logger.error(f"create_conversation_title error:{str(e)}")
-            return ResponseContent(error_code=-1, message=f"Generate title failed, {str(e)}", data={})
+            return ResponseContent(error_code=-1, message=f"Failed to generate title: {str(e)}", data={})
 
     @db_transaction
     async def create_conversation(
@@ -235,6 +242,14 @@ class ChatService:
             session,
             conversation_id: str
     ):
+        """
+        Delete a conversation and its messages
+        Args:
+            session: Database session
+            conversation_id: ID of the conversation to delete
+        Returns:
+            ResponseContent: Response indicating success/failure
+        """
         try:
             result = await session.execute(select(Llama_conversation).filter(Llama_conversation.id == conversation_id))
             conversation = result.scalar_one_or_none()
@@ -243,10 +258,10 @@ class ChatService:
 
             await session.delete(conversation)
             await session.commit()
-            return ResponseContent(error_code=0, message="Delete conversation successfully", data=None)
+            return ResponseContent(error_code=0, message="Successfully deleted conversation", data=None)
         except Exception as e:
-            logger.error(f"delete_conversation error:{str(e)}")
-            raise Exception(f"delete_conversation error:{str(e)}")
+            logger.error(f"delete_conversation error: {str(e)}")
+            raise Exception(f"Failed to delete conversation: {str(e)}")
 
     @db_transaction
     async def delete_message(
@@ -254,12 +269,20 @@ class ChatService:
             session,
             message_id: str
     ):
+        """
+        Delete a message and its related messages
+        Args:
+            session: Database session
+            message_id: ID of the message to delete
+        Returns:
+            ResponseContent: Response indicating success/failure
+        """
         try:
             stmt = select(Llama_chat_message).where(Llama_chat_message.id == message_id)
             result = await session.execute(stmt)
             message = result.scalar_one_or_none()
             if message is None:
-                raise HTTPException(status_code=404, detail="消息不存在")
+                raise HTTPException(status_code=404, detail="Message not found")
 
             create_time = message.create_time
             stmt = (select(Llama_chat_message).where(Llama_chat_message.create_time == create_time)
@@ -274,11 +297,11 @@ class ChatService:
                 delete_ids.append(msg.id)
             await session.commit()
 
-            return ResponseContent(error_code=0, message="Delete message successfully", data={"ids": delete_ids})
+            return ResponseContent(error_code=0, message="Successfully deleted message", data={"ids": delete_ids})
         except Exception as e:
             await session.rollback()
-            logger.error(f"delete_message error:{str(e)}")
-            return ResponseContent(error_code=-1, message=f"Delete message failed, {str(e)}", data={})
+            logger.error(f"delete_message error: {str(e)}")
+            return ResponseContent(error_code=-1, message=f"Failed to delete message: {str(e)}", data={})
 
     @db_transaction
     async def update_conversation(
@@ -553,7 +576,7 @@ class ChatService:
             question = chat_request.question
             language = ""
             if a_conversation.language_id == "zh":
-                language = f".请用中文回答."
+                language = f".Please answer in Chinese."
             elif a_conversation.language_id == "en":
                 language = f".Please reply in English."
             elif a_conversation.language_id == "auto":
@@ -718,111 +741,120 @@ class ChatService:
             question: str,
             conversation_id: str = None
     ):
-        message_id = str(uuid.uuid4())
-
-        create_at = datetime.now().timestamp()
-
-        # 当返回结束后，需要将内容保存到历史对话当中
-        user_message = Llama_chat_message(
-            id=message_id,
-            role="user",
-            content=question,
-            create_time=create_at,
-            modify_time=datetime.now().timestamp(),
-            create_at=datetime.now().timestamp(),
-            update_at=datetime.now().timestamp(),
-            conversation_id=conversation_id,
-            status="success",
-            error_message="success"
-        )
-        rot_message = Llama_chat_message(
-            id=str(uuid.uuid4()),
-            role="assistant",
-            content="",
-            # parent_id=message_id,
-            modify_time=datetime.now().timestamp(),
-            create_time=create_at,
-            create_at=datetime.now().timestamp(),
-            update_at=datetime.now().timestamp(),
-            conversation_id=conversation_id,
-            status="pending",
-            error_message=""
-        )
-
-        message_json_obj = asdict(user_message)
-
-        message_json_rob_obj = asdict(rot_message)
-
-        message_list = []
-        message_list_json = []
+        """
+        Generate streaming response data for chat messages
+        
+        Args:
+            session: Database session
+            response: Response from LLM
+            question: User's question
+            conversation_id: ID of the conversation
+            
+        Yields:
+            Server-sent events containing chat message data
+        """
         try:
+            message_id = str(uuid.uuid4())
+            create_at = datetime.now().timestamp()
+
+            # Create user message
+            user_message = Llama_chat_message(
+                id=message_id,
+                role="user",
+                content=question,
+                create_time=create_at,
+                modify_time=create_at,
+                create_at=create_at,
+                update_at=create_at,
+                conversation_id=conversation_id,
+                status="success",
+                error_message="success"
+            )
+
+            # Create assistant message
+            rot_message = Llama_chat_message(
+                id=str(uuid.uuid4()),
+                role="assistant",
+                content="",
+                modify_time=create_at,
+                create_time=create_at,
+                create_at=create_at,
+                update_at=create_at,
+                conversation_id=conversation_id,
+                status="pending",
+                error_message=""
+            )
+
+            # Convert messages to dict format
+            message_json_obj = asdict(user_message)
+            message_json_rob_obj = asdict(rot_message)
+
+            # Save messages to database
             session.add(user_message)
             session.add(rot_message)
-
             await session.flush()
             await session.commit()
 
-            message_list_json.append(message_json_obj)
+            # Send initial event
             yield "event: sending\n"
-            yield "data: {\"userMessage\":" + json.dumps(
-                message_json_obj) + ", \"botMessage\": " + json.dumps(
-                message_json_rob_obj) + ", \"conversation_id\": \"" + conversation_id + "\" }\n\n"
-            # 处理响应流
-            if hasattr(response.response_gen, '__aiter__'):  # 检查是否是异步迭代器
-                async for item in response.response_gen:
+            yield f"data: {json.dumps({'userMessage': message_json_obj, 'botMessage': message_json_rob_obj, 'conversation_id': conversation_id})}\n\n"
+
+            # Process streaming response
+            async def process_stream(stream):
+                async for item in stream:
                     rot_message.content += item
                     message_json_rob_obj['content'] += item
-                    data = "data: " + json.dumps(message_json_rob_obj) + "\n\n"
                     yield "event: pending\n"
-                    yield f"{data}".encode("utf-8")
-            else:  # 如果是同步迭代器
+                    yield f"data: {json.dumps(message_json_rob_obj)}\n\n"
+
+            # Handle both async and sync iterators
+            if hasattr(response.response_gen, '__aiter__'):
+                async for data in process_stream(response.response_gen):
+                    yield data
+            else:
                 for item in response.response_gen:
                     rot_message.content += item
                     message_json_rob_obj['content'] += item
-                    data = "data: " + json.dumps(message_json_rob_obj) + "\n\n"
                     yield "event: pending\n"
-                    yield f"{data}".encode("utf-8")
+                    yield f"data: {json.dumps(message_json_rob_obj)}\n\n"
 
+            # Update message status on completion
             rot_message.status = "success"
-
             async with async_session() as new_session:
                 stmt = select(Llama_chat_message).where(Llama_chat_message.id == rot_message.id)
                 result = await new_session.execute(stmt)
                 db_rot_message = result.scalar_one()
-
                 db_rot_message.content = rot_message.content
                 db_rot_message.status = "success"
                 await new_session.commit()
 
+            # Send success event
             message_json_rob_obj['status'] = "success"
-            message_list_json.append(message_json_rob_obj)
-            message_json_rob_obj["content"] = rot_message.content
             yield "event: success\n"
-            yield "data: {\"userMessage\":" + json.dumps(
-                message_json_obj) + ", \"botMessage\": " + json.dumps(
-                message_json_rob_obj) + ", \"conversation_id\": \"" + conversation_id + "\" }\n\n"
+            yield f"data: {json.dumps({'userMessage': message_json_obj, 'botMessage': message_json_rob_obj, 'conversation_id': conversation_id})}\n\n"
 
         except Exception as e:
+            logger.error(f"Error generating chat response: {str(e)}")
+            # Handle error case
             async with async_session() as error_session:
                 async with error_session.begin():
                     stmt = select(Llama_chat_message).where(Llama_chat_message.id == rot_message.id)
                     result = await error_session.execute(stmt)
                     error_message = result.scalar_one()
-
                     error_message.status = "error"
                     error_message.error_code = "chat_error"
                     error_message.error_message = str(e)
                     await error_session.commit()
 
-            message_json_rob_obj["content"] = rot_message.content
-            message_json_rob_obj['status'] = "error"
-            message_json_rob_obj['error_code'] = "chat_error"
-            message_json_rob_obj['error_message'] = "chat_error"
+            message_json_rob_obj.update({
+                "content": rot_message.content,
+                "status": "error",
+                "error_code": "chat_error",
+                "error_message": str(e)
+            })
 
             yield "event: error\n"
-            yield "data: {\"userMessage\":" + json.dumps(
-                message_json_obj) + ", \"botMessage\": " + json.dumps(
-                message_json_rob_obj) + ", \"conversation_id\": \"" + conversation_id + "\" }\n\n"
+            yield f"data: {json.dumps({'userMessage': message_json_obj, 'botMessage': message_json_rob_obj, 'conversation_id': conversation_id})}\n\n"
 
     async def generate_data_2(
             self,

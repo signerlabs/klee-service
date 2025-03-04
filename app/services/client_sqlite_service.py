@@ -8,14 +8,12 @@ from typing import Type
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import select, update, MetaData, Table, Column, Boolean, text
+from sqlalchemy import select, update, MetaData, text
 from app.model.BackgroundTask import BackgroundTask, TaskStatus, TaskType
 import time
 import aiosqlite
 from app.model.Chat import ChatMessage, ChatConversation
-# import logging
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.model.knowledge import Knowledge
@@ -34,8 +32,6 @@ DATABASE_PATH = "C:/Users/Administrator/AppData/Local/com/signer_labs/klee/db/kl
 if os.name == "posix":
     if 'darwin' in platform.system().lower():
         DATABASE_PATH = os.path.join(user_home, 'Library/Application Support/com.signerlabs.klee/db/klee.sqlite')
-        
-logger.info(f"Database URL: {DATABASE_PATH}")
 
 DATABASE_URL = f"sqlite+aiosqlite:///{DATABASE_PATH}"
 

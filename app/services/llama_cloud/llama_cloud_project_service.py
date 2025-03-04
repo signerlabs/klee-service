@@ -1,9 +1,7 @@
 import logging
-import os
 
-from dotenv import load_dotenv
 from llama_cloud import ProjectCreate
-from llama_cloud.client import AsyncLlamaCloud
+from app.model.klee_settings import Settings as KleeSettings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,13 +12,20 @@ logger = logging.getLogger(__name__)
 
 class LlamaCloudProjectService:
     def __init__(self):
-        load_dotenv(f".env")
-        self.async_client = AsyncLlamaCloud(token=os.getenv("LLAMA_CLOUD_API_KEY"))
+        logger.info("Initializing LlamaCloudProjectService")
+        self.async_client = KleeSettings.async_llama_cloud
 
     async def create_project(
             self,
             request
     ):
+        """
+        Create a new project in LlamaCloud
+        Args:
+            request: ProjectCreate
+        Returns:
+            Project
+        """
         response = await self.async_client.projects.create_project(
             request=ProjectCreate(
                 name=request.name
@@ -33,6 +38,13 @@ class LlamaCloudProjectService:
             self,
             project_id: str
     ):
+        """
+        Get a project by ID in LlamaCloud
+        Args:
+            project_id: str
+        Returns:
+            Project
+        """
         response = await self.async_client.projects.get_project(project_id=project_id)
         logger.info(f"Project retrieved: {response}")
         return response
@@ -41,6 +53,13 @@ class LlamaCloudProjectService:
             self,
             project_id: str
     ):
+        """
+        Delete a project by ID in LlamaCloud
+        Args:
+            project_id: str
+        Returns:
+            None
+        """
         response = await self.async_client.projects.delete_project(project_id=project_id)
         logger.info(f"Project deleted: {response}")
         return response

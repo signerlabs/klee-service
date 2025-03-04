@@ -15,13 +15,6 @@ from llama_index.llms.anthropic import Anthropic
 
 from llama_index.llms.deepseek import DeepSeek
 
-from llama_index.embeddings.huggingface import (
-    HuggingFaceEmbedding,
-)
-
-
-from llama_index.core.utils import get_cache_dir
-
 from llama_index.core.node_parser import (
     HierarchicalNodeParser,
     get_leaf_nodes
@@ -36,8 +29,6 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 
 from llama_index.core.settings import Settings as llamaSettings
 
-from llama_index.core.schema import QueryBundle
-
 from llama_index.llms.ollama import Ollama
 from app.model.knowledge import File
 
@@ -46,7 +37,6 @@ from pathlib import Path
 import uuid
 
 from app.services.client_sqlite_service import db_transaction
-from app.model.base_config import BaseConfig
 
 from app.model.knowledge import Knowledge
 from app.common.LlamaEnum import (
@@ -65,7 +55,7 @@ from sqlalchemy import select
 from app.model.klee_settings import Settings as KleeSettings
 
 from llama_index.core.retrievers import QueryFusionRetriever
-from typing import List
+from typing import List, Dict, Optional, Any, Union
 
 from llama_index.core.agent import AgentRunner
 from llama_index.core.tools.query_engine import QueryEngineTool
@@ -74,10 +64,26 @@ from app.model.note import Note
 from app.model.global_settings import GlobalSettings
 
 # 配置日志记录
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+
+class LlamaIndexError(Exception):
+    """Base exception class for LlamaIndex service errors"""
+    pass
+
+class ModelLoadError(LlamaIndexError):
+    """Raised when loading a model fails"""
+    pass
+
+class ConfigError(LlamaIndexError):
+    """Raised when there is a configuration error"""
+    pass
+
+class PersistenceError(LlamaIndexError):
+    """Raised when persisting data fails"""
+    pass
 
 class LlamaIndexService:
     def __init__(self):
@@ -86,59 +92,80 @@ class LlamaIndexService:
         # embed model path
         self.embed_model = os.path.join(self.user_home)
         self.chunk_sizes = [2048, 512, 128]
+        logger.info("Initialized LlamaIndexService")
 
     async def init_config(self):
         """
         init basic config
         """
-        os_type = self.judge_system_type()
-        KleeSettings.os_type = os_type
-        KleeSettings.un_load = True
-        data = {
-            "embedModelList": None,
-            "llmModelList": None,
-            "uid": None,
-            "openai_api_key": "",
-            "embed_model": None,
-            "llm": None,
-            "http_proxy": ""
-        }
+        try:
+            os_type = self.judge_system_type()
+            KleeSettings.os_type = os_type
+            KleeSettings.un_load = True
+            data = {
+                "embedModelList": None,
+                "llmModelList": None,
+                "uid": None,
+                "openai_api_key": "",
+                "embed_model": None,
+                "llm": None,
+                "http_proxy": ""
+            }
 
-        if os_type == SystemTypeDiff.WIN.value:
-            if not os.path.exists(SystemTypeDiffLlmUrl.WIN_PATH.value):
-                os.makedirs(SystemTypeDiffLlmUrl.WIN_PATH.value, exist_ok=True)
-            if not os.path.exists(SystemTypeDiffConfigUrl.WIN_OS_path.value):
-                os.makedirs(SystemTypeDiffConfigUrl.WIN_OS_path.value, exist_ok=True)
-            if not os.path.exists(SystemTypeDiffTempFileUrl.WIN_PATH.value):
-                os.makedirs(SystemTypeDiffTempFileUrl.WIN_PATH.value)
-            if not os.path.exists(f"{SystemTypeDiffTempFileUrl.WIN_PATH.value}default"):
-                os.makedirs(f"{SystemTypeDiffTempFileUrl.WIN_PATH.value}default", exist_ok=True)
-                with open(f"{SystemTypeDiffTempFileUrl.WIN_PATH.value}default/default.txt", "w") as default_file:
-                    default_file.write("")
-            if not os.path.exists(f"{SystemEmbedUrl.WIN_PATH.value}"):
-                os.makedirs(f"{SystemEmbedUrl.WIN_PATH.value}", exist_ok=True)
-            with open(SystemTypeDiffConfigUrl.WIN_OS.value, 'w') as file:
-                yaml.dump(data, file, default_flow_style=False)
+            await self._setup_directories(os_type, data)
+            await self.load_config(os_type=os_type)
+            logger.info(f"Configuration initialized for OS type: {os_type}")
+        except Exception as e:
+            logger.error(f"Failed to initialize config: {str(e)}")
+            raise ConfigError(f"Configuration initialization failed: {str(e)}")
 
-        elif os_type == SystemTypeDiff.MAC.value:
-            if not os.path.exists(SystemTypeDiffLlmUrl.MAC_PATH.value):
-                os.makedirs(SystemTypeDiffLlmUrl.MAC_PATH.value, exist_ok=True)
-            if not os.path.exists(SystemTypeDiffConfigUrl.MAC_OS_path.value):
-                os.makedirs(SystemTypeDiffConfigUrl.MAC_OS_path.value, exist_ok=True)
-            if not os.path.exists(SystemTypeDiffTempFileUrl.MAC_PATH.value):
-                os.makedirs(SystemTypeDiffTempFileUrl.MAC_PATH.value, exist_ok=True)
-            if not os.path.exists(f"{SystemTypeDiffTempFileUrl.MAC_PATH.value}default"):
-                os.makedirs(f"{SystemTypeDiffTempFileUrl.MAC_PATH.value}default", exist_ok=True)
-            if not os.path.exists(f"{SystemTiktokenUrl.MAC_PATH.value}"):
-                os.makedirs(f"{SystemTiktokenUrl.MAC_PATH.value}", exist_ok=True)
-            if not os.path.exists(f"{SystemEmbedUrl.MAC_PATH.value}"):
-                os.makedirs(f"{SystemEmbedUrl.MAC_PATH.value}", exist_ok=True)
-            os.environ["TIKTOKEN_CACHE_DIR"] = f"{SystemTiktokenUrl.MAC_PATH.value}"
-            with open(f"{SystemTypeDiffTempFileUrl.MAC_PATH.value}default/default.txt", "w") as default_file:
-                default_file.write("")
-            with open(SystemTypeDiffConfigUrl.MAC_OS.value, 'w') as file:
-                yaml.dump(data, file, default_flow_style=False)
-        await self.load_config(os_type=os_type)
+    async def _setup_directories(self, os_type: str, config_data: dict) -> None:
+        """Set up necessary directories based on OS type"""
+        try:
+            if os_type == SystemTypeDiff.WIN.value:
+                directories = [
+                    SystemTypeDiffLlmUrl.WIN_PATH.value,
+                    SystemTypeDiffConfigUrl.WIN_OS_path.value,
+                    SystemTypeDiffTempFileUrl.WIN_PATH.value,
+                    f"{SystemTypeDiffTempFileUrl.WIN_PATH.value}default",
+                    SystemEmbedUrl.WIN_PATH.value
+                ]
+                
+                for directory in directories:
+                    os.makedirs(directory, exist_ok=True)
+                    
+                # Create default file
+                with open(f"{SystemTypeDiffTempFileUrl.WIN_PATH.value}default/default.txt", "w") as f:
+                    f.write("")
+                    
+                # Write config
+                with open(SystemTypeDiffConfigUrl.WIN_OS.value, 'w') as f:
+                    yaml.dump(config_data, f, default_flow_style=False)
+                    
+            elif os_type == SystemTypeDiff.MAC.value:
+                directories = [
+                    SystemTypeDiffLlmUrl.MAC_PATH.value,
+                    SystemTypeDiffConfigUrl.MAC_OS_path.value,
+                    SystemTypeDiffTempFileUrl.MAC_PATH.value,
+                    f"{SystemTypeDiffTempFileUrl.MAC_PATH.value}default",
+                    SystemTiktokenUrl.MAC_PATH.value,
+                    SystemEmbedUrl.MAC_PATH.value
+                ]
+                
+                for directory in directories:
+                    os.makedirs(directory, exist_ok=True)
+                    
+                os.environ["TIKTOKEN_CACHE_DIR"] = f"{SystemTiktokenUrl.MAC_PATH.value}"
+                
+                with open(f"{SystemTypeDiffTempFileUrl.MAC_PATH.value}default/default.txt", "w") as f:
+                    f.write("")
+                    
+                with open(SystemTypeDiffConfigUrl.MAC_OS.value, 'w') as f:
+                    yaml.dump(config_data, f, default_flow_style=False)
+                    
+        except Exception as e:
+            logger.error(f"Failed to setup directories: {str(e)}")
+            raise ConfigError(f"Directory setup failed: {str(e)}")
 
     def judge_system_type(self) -> str:
         """
@@ -226,10 +253,6 @@ class LlamaIndexService:
 
             llamaSettings.embed_model = f"local:{SystemEmbedUrl.MAC_PATH.value}all-MiniLM-L6-v2"
 
-        with open(KleeSettings.config_url, 'r') as file:
-            KleeSettings.data = yaml.safe_load(file)
-            if KleeSettings.data.get('openai_api_key') is not None:
-                os.environ["OPENAI_API_KEY"] = KleeSettings.data.get("openai_api_key")
         KleeSettings.center_url = f"https://xltwffswqvowersvchkj.supabase.co/"
 
     def load_text_document(
@@ -256,44 +279,34 @@ class LlamaIndexService:
             gc.collect()
 
     async def load_llm(
-            self,
-            provider_id: str = None,
-            model_name: str = None,
-            api_type: str = None,
-            api_base_url: str = "https://api.deepseek.com",
-    ):
-        """
-        load llm
+        self,
+        provider_id: Optional[str] = None,
+        model_name: Optional[str] = None,
+        api_type: Optional[str] = None,
+        api_base_url: str = "https://api.deepseek.com",
+    ) -> None:
+        """Load language model based on provider and configuration
+        
         Args:
-            provider_id: provider id
-            model_name: model name
-            api_type: api type
-            api_base_url: api base url
-        Returns: None
+            provider_id: Provider identifier
+            model_name: Name of the model to load
+            api_type: Type of API to use
+            api_base_url: Base URL for API calls
+            
+        Raises:
+            ModelLoadError: If model loading fails
         """
         try:
             with self.release_memory():
                 llamaSettings.llm = None
                 self.release_memory()
 
-            if KleeSettings.local_mode is False:
-                if provider_id != SystemTypeDiffModelType.OPENAI.value and provider_id != SystemTypeDiffModelType.CLAUDE.value:
-                    if api_type == SystemTypeDiffModelType.OPENAI.value:
-                        llamaSettings.llm = OpenAI(model=model_name, temperature=0.5)
-                    elif api_type == SystemTypeDiffModelType.CLAUDE.value:
-                        llamaSettings.llm = Anthropic(model=model_name, temperature=0.5)
-                    elif api_type == SystemTypeDiffModelType.DEEPSEEK.value:
-                        if api_base_url is not None and api_base_url.find("luchentech") != -1:
-                            api_base_url = "https://cloud.luchentech.com/api/maas"
-                            llamaSettings.llm = DeepSeek(
-                                model=model_name,
-                                temperature=0.5,
-                                api_key=os.environ.get("DEEPSEEK_API_KEY"),
-                                api_base=api_base_url
-                            )
-                        else:
-                            llamaSettings.llm = DeepSeek(model=model_name, temperature=0.5)
-                    KleeSettings.un_load = False
+            if not KleeSettings.local_mode:
+                if provider_id not in [SystemTypeDiffModelType.OPENAI.value, SystemTypeDiffModelType.CLAUDE.value]:
+                    llm = self._get_cloud_llm(api_type, model_name, api_base_url)
+                    if llm:
+                        llamaSettings.llm = llm
+                        KleeSettings.un_load = False
                 else:
                     KleeSettings.un_load = False
             else:
@@ -304,34 +317,42 @@ class LlamaIndexService:
                     )
                     KleeSettings.un_load = False
 
+            logger.info(f"Successfully loaded LLM: {provider_id} - {model_name}")
+
         except Exception as e:
-            raise Exception(f"Load llm failed, provider_id:{provider_id},  model_id:{model_name}")
+            logger.error(f"Failed to load LLM: {str(e)}")
+            raise ModelLoadError(f"Failed to load model {model_name}: {str(e)}")
 
-    async def persist_file_to_disk_2(
-            self,
-            path: str,
-            store_dir: str,
-            chunk_sizes=None,
-    ) -> None:
-        try:
-            documents = self.load_text_document(path)
-
-            chunk_size = chunk_sizes or self.chunk_sizes
-            node_parser = HierarchicalNodeParser.from_defaults(chunk_sizes=chunk_size)
-            nodes = node_parser.get_nodes_from_documents(documents)
-            leaf_nodes = get_leaf_nodes(nodes)
-            doc_store = SimpleDocumentStore()
-            doc_store.add_documents(nodes)
-
-            store_context = StorageContext.from_defaults(docstore=doc_store)
-            auto_merging_index = VectorStoreIndex(
-                leaf_nodes, storage_context=store_context
-            )
-
-            auto_merging_index.storage_context.persist(persist_dir=store_dir)
-        except Exception as e:
-            raise Exception(e)
-
+    def _get_cloud_llm(
+        self, 
+        api_type: str,
+        model_name: str,
+        api_base_url: str
+    ):
+        """Get cloud-based language model instance
+        
+        Args:
+            api_type: Type of API
+            model_name: Name of the model
+            api_base_url: Base URL for API
+            
+        Returns:
+            Language model instance
+        """
+        if api_type == SystemTypeDiffModelType.OPENAI.value:
+            return OpenAI(model=model_name, temperature=0.5)
+        elif api_type == SystemTypeDiffModelType.CLAUDE.value:
+            return Anthropic(model=model_name, temperature=0.5)
+        elif api_type == SystemTypeDiffModelType.DEEPSEEK.value:
+            if "luchentech" in api_base_url:
+                return DeepSeek(
+                    model=model_name,
+                    temperature=0.5,
+                    api_key=os.environ.get("DEEPSEEK_API_KEY"),
+                    api_base="https://cloud.luchentech.com/api/maas"
+                )
+            return DeepSeek(model=model_name, temperature=0.5)
+        return None
 
     def build_auto_merging_index(
             self,
@@ -370,75 +391,188 @@ class LlamaIndexService:
         return auto_merging_index
 
     def get_auto_merging_query_engine(
-            self,
-            index: VectorStoreIndex,
-            similarity_top_k=12,
-            rerank_top_n=6
+        self,
+        index: VectorStoreIndex,
+        similarity_top_k: int = 12,
+        rerank_top_n: int = 6,
+        streaming: bool = True
     ) -> RetrieverQueryEngine:
-        """
-        Get auto merging query engine
+        """Get auto merging query engine
+        
         Args:
-            index: index
-            similarity_top_k: similarity top k
-            rerank_top_n: rerank top n
-        Returns: query engine
+            index: Vector store index
+            similarity_top_k: Number of top similar results
+            rerank_top_n: Number of results to rerank
+            streaming: Whether to enable streaming
+            
+        Returns:
+            Query engine instance
         """
-        base_retriever = index.as_retriever(
-            # streaming=True,
-            similarity_top_k=similarity_top_k
-        )
-        retriever = AutoMergingRetriever(
-            base_retriever,
-            index.storage_context,
-            simple_ratio_thresh=0.5,
-            verbose=False,
-        )
-        auto_merging_engine = RetrieverQueryEngine.from_args(
-            retriever,
-            # response_mode=ResponseMode.GENERATION,
-            streaming=True,
-            rerank_top_n=rerank_top_n,
-            # text_qa_template=PromptTemplate(sim_template)
-            # node_postprocessors=[rerank]
-        )
-        return auto_merging_engine
-
-    async def get_retrieve_notes_content(
-            self,
-            query_engine: RetrieverQueryEngine,
-            question: str
-    ):
-        """
-        Get retrieve notes content
-        Args:
-            query_engine: query engine
-            question: question
-        Returns: content
-        """
-        score_list = query_engine.retrieve(query_bundle=QueryBundle(query_str=question))
-        content = ""
-        for node in score_list:
-            content = f"{content}{node.text}\n\n"
-        return content
-
-    async def choose_which_embed_model(
-            self,
-            embed_model_path: str,
-    ) -> None:
-        """
-            Choose which embed model of llama settings for global
-        Args:
-            embed_model_path: path of embed model
-        Returns: None
-        """
-        if embed_model_path is not None:
-            cache_folder = os.path.join(get_cache_dir(), "models")
-            os.makedirs(cache_folder, exist_ok=True)
-            embed_model = HuggingFaceEmbedding(
-                model_name="local:".join(embed_model_path), cache_folder=cache_folder
+        try:
+            base_retriever = index.as_retriever(
+                similarity_top_k=similarity_top_k
             )
-            llamaSettings.embed_model = embed_model
-            KleeSettings.embed_model_path = "local:".join(embed_model_path)
+            
+            retriever = AutoMergingRetriever(
+                base_retriever,
+                index.storage_context,
+                simple_ratio_thresh=0.5,
+                verbose=True,
+            )
+            
+            query_engine = RetrieverQueryEngine.from_args(
+                retriever,
+                streaming=streaming,
+                rerank_top_n=rerank_top_n,
+            )
+            
+            logger.info("Successfully created auto merging query engine")
+            return query_engine
+            
+        except Exception as e:
+            logger.error(f"Failed to create query engine: {str(e)}")
+            raise Exception(f"Query engine creation failed: {str(e)}")
+
+    async def get_chat_engine(
+        self,
+        knowledge_ids: Optional[List[str]] = None,
+        knowledge_list: Optional[List[Knowledge]] = None,
+        note_ids: Optional[List[str]] = None,
+        note_list: Optional[List[Note]] = None,
+        file_infos: Optional[Dict] = None,
+        chat_history: Optional[List] = None,
+        language: Optional[str] = None
+    ):
+        """Get chat engine with configured tools and history
+        
+        Args:
+            knowledge_ids: List of knowledge IDs
+            knowledge_list: List of Knowledge objects
+            note_ids: List of note IDs  
+            note_list: List of Note objects
+            file_infos: Dictionary of file information
+            chat_history: Chat history
+            language: Language setting
+            
+        Returns:
+            Configured chat engine
+        """
+        try:
+            agent_tools = []
+            chat_history = chat_history or []
+            
+            # Process knowledge IDs
+            if knowledge_ids:
+                agent_tools.extend(await self._process_knowledge_ids(knowledge_ids))
+                
+            # Process notes
+            if note_list:
+                agent_tools.extend(await self._process_notes(note_list))
+                
+            # If no tools, add default
+            if not agent_tools:
+                agent_tools.append(await self._get_default_tool())
+                
+            chat_engine = AgentRunner.from_llm(
+                tools=agent_tools,
+                llm=llamaSettings.llm,
+                system_prompt="",  # TODO: Add system prompt
+                verbose=False,
+                chat_history=chat_history
+            )
+            
+            logger.info("Successfully created chat engine")
+            return chat_engine
+            
+        except Exception as e:
+            logger.error(f"Failed to create chat engine: {str(e)}")
+            raise Exception(f"Chat engine creation failed: {str(e)}")
+
+    async def _process_knowledge_ids(self, knowledge_ids: List[str]) -> List[QueryEngineTool]:
+        """Process knowledge IDs to create query tools"""
+        tools = []
+        for kid in knowledge_ids:
+            if await self.has_files(f"{KleeSettings.temp_file_url}{kid}"):
+                # Create and add tool
+                pass
+        return tools
+        
+    async def _process_notes(self, notes: List[Note]) -> List[QueryEngineTool]:
+        """Process notes to create query tools"""
+        tools = []
+        for note in notes:
+            if await self.has_files(f"{KleeSettings.temp_file_url}{note.id}"):
+                documents = self.load_text_document(f"{KleeSettings.temp_file_url}{note.id}")
+                index = self.build_auto_merging_index(
+                    documents=documents,
+                    save_dir=f"{KleeSettings.vector_url}{note.id}"
+                )
+                query_engine = self.get_auto_merging_query_engine(index=index)
+                tool = QueryEngineTool.from_defaults(
+                    query_engine=query_engine,
+                    name=note.title,
+                    description=note.content
+                )
+                tools.append(tool)
+        return tools
+
+    async def _get_default_tool(self) -> QueryEngineTool:
+        """Get default query tool"""
+        documents = self.load_text_document(f"{KleeSettings.temp_file_url}default")
+        index = self.build_auto_merging_index(
+            documents=documents,
+            save_dir=f"{KleeSettings.vector_url}default"
+        )
+        query_engine = self.get_auto_merging_query_engine(index=index)
+        return QueryEngineTool.from_defaults(
+            query_engine=query_engine,
+            name="Default",
+            description="Default query tool"
+        )
+
+    async def persist_file_to_disk_2(
+            self,
+            path: str,
+            store_dir: str,
+            chunk_sizes=None,
+    ) -> None:
+        try:
+            documents = self.load_text_document(path)
+
+            chunk_size = chunk_sizes or self.chunk_sizes
+            node_parser = HierarchicalNodeParser.from_defaults(chunk_sizes=chunk_size)
+            nodes = node_parser.get_nodes_from_documents(documents)
+            leaf_nodes = get_leaf_nodes(nodes)
+            doc_store = SimpleDocumentStore()
+            doc_store.add_documents(nodes)
+
+            store_context = StorageContext.from_defaults(docstore=doc_store)
+            auto_merging_index = VectorStoreIndex(
+                leaf_nodes, storage_context=store_context
+            )
+
+            auto_merging_index.storage_context.persist(persist_dir=store_dir)
+        except Exception as e:
+            raise Exception(e)
+
+    # async def choose_which_embed_model(
+    #         self,
+    #         embed_model_path: str,
+    # ) -> None:
+    #     """
+    #         Choose which embed model of llama settings for global
+    #     Args:
+    #         embed_model_path: path of embed model
+    #     Returns: None
+    #     """
+    #     if embed_model_path is not None:
+    #         cache_folder = os.path.join(get_cache_dir(), "models")
+    #         os.makedirs(cache_folder, exist_ok=True)
+    #         embed_model = HuggingFaceEmbedding(
+    #             model_name="local:".join(embed_model_path), cache_folder=cache_folder
+    #         )
+    #         llamaSettings.embed_model = embed_model
+    #         KleeSettings.embed_model_path = "local:".join(embed_model_path)
 
     async def import_exist_dir(
             self,
@@ -528,7 +662,7 @@ class LlamaIndexService:
                     base_retriever,
                     index.storage_context,
                     simple_ratio_thresh=0.5,
-                    verbose=False,
+                    verbose=True,
                 )
                 retrievers.append(retriever)
 
@@ -537,12 +671,12 @@ class LlamaIndexService:
                 documents = self.load_text_document(f"{KleeSettings.temp_file_url}{n}")
                 index = self.build_auto_merging_index(documents, save_dir=f"{KleeSettings.vector_url}{n}")
                 base_retriever = index.as_retriever(
-                    similarity_top_k=6
+                    similarity_top_k=12
                 )
                 retriever = AutoMergingRetriever(
                     base_retriever,
                     index.storage_context,
-                    simple_ratio_thresh=0.5,
+                    simple_ratio_thresh=0.2,
                     verbose=True,
                 )
 
@@ -561,11 +695,12 @@ class LlamaIndexService:
                     retriever = AutoMergingRetriever(
                         base_retriever,
                         index.storage_context,
-                        simple_ratio_thresh=0.5,
-                        verbose=False,
+                        simple_ratio_thresh=0.2,
+                        verbose=True,
                     )
                     retrievers.append(retriever)
 
+        # 文本问答模板
         text_qa_prompt = """
                "Context information is below.\n"
                "---------------------\n"
@@ -577,6 +712,7 @@ class LlamaIndexService:
                "Answer: "
            """
 
+        # 精炼改进提示模板
         refine_prompt = """
                "The original query is as follows: {query_str}\n"
                "We have provided an existing answer: {existing_answer}\n"
@@ -591,6 +727,7 @@ class LlamaIndexService:
                "Refined Answer: "
            """
 
+        # 总结提示模板
         summary_prompt = """
                "Context information from multiple sources is below.\n"
                "---------------------\n"
@@ -606,23 +743,26 @@ class LlamaIndexService:
             documents = self.load_text_document(f"{KleeSettings.temp_file_url}default")
             index = self.build_auto_merging_index(documents=documents, save_dir=f"{KleeSettings.vector_url}default")
             base_retriever = index.as_retriever(
-                # streaming=True,
                 similarity_top_k=12
             )
             retriever = AutoMergingRetriever(
                 base_retriever,
                 index.storage_context,
                 simple_ratio_thresh=0.2,
-                verbose=False,
+                verbose=True,
             )
             retrievers.append(retriever)
 
+            # 设置问答模板不需要根据上下文内容
             text_qa_prompt = """
                 "if the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content. \n"
                 "answer the query.\n"
                 "Query: {query_str}\n"
             """
 
+            print(f"当前的QA模板内容为: {text_qa_prompt} \n")
+
+            # 总结提示模板
             summary_prompt = """
                 "if the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content. \n"
                 "answer the query.\n"
@@ -640,7 +780,7 @@ class LlamaIndexService:
         qf_retriever = QueryFusionRetriever(
             retrievers,
             similarity_top_k=12,
-            num_queries=4,  # Set to 1 for now
+            num_queries=4,
             use_async=True,
             query_gen_prompt=QUERY_GEN_PROMPT,
         )
@@ -673,63 +813,6 @@ class LlamaIndexService:
             if os.path.isfile(file_path):
                 return True
         return False
-
-    async def get_chat_engine(
-            self,
-            knowledge_ids: List[str] = None,
-            knowledge_list: List[Knowledge] = None,
-            note_ids: List[str] = None,
-            note_list: List[Note] = None,
-            file_infos: dict = None,
-            chat_history=None,
-            language: str = None
-    ):
-        """
-            Get chat engine
-        """
-        agent_tools = []
-
-        if chat_history is None:
-            chat_history = []
-        ids = []
-        if knowledge_ids is not None:
-            for knowledge_id in knowledge_ids:
-                file_url = f"{KleeSettings.temp_file_url}{knowledge_id}"
-                flag = await self.has_files(file_url)
-                if flag is True:
-                    ids.append(knowledge_id)
-        for note in note_list:
-            file_url = f"{KleeSettings.temp_file_url}{note.id}"
-            flag = await self.has_files(file_url)
-            if flag is True:
-                documents_url = f"{KleeSettings.temp_file_url}{note.id}"
-                documents = self.load_text_document(documents_url)
-                # Get vector url
-                vector_url = f"{KleeSettings.vector_url}{note.id}"
-                index = self.build_auto_merging_index(
-                    documents=documents,
-                    save_dir=vector_url
-                )
-
-                query_engine = self.get_auto_merging_query_engine(index=index)
-
-                # convert query engine to tool
-                query_engine_tool = QueryEngineTool.from_defaults(
-                    query_engine=query_engine,
-                    name=note.title,
-                    description=note.content
-                )
-                agent_tools.append(query_engine_tool)
-
-        chat_engine = AgentRunner.from_llm(
-            tools=agent_tools,
-            llm=llamaSettings.llm,
-            system_prompt="""""", # TODO: add system prompt
-            verbose=False,
-            chat_history=chat_history
-        )
-
-        return chat_engine
 
     @db_transaction
     async def init_global_model_settings(
@@ -769,34 +852,4 @@ class LlamaIndexService:
             KleeSettings.model_name = result.model_name
             KleeSettings.model_path = result.model_path
             KleeSettings.provider_id = result.provider_id
-        logger.info(f"Init global model settings: {KleeSettings.local_mode}, {KleeSettings.model_id}, {KleeSettings.model_name}, {KleeSettings.model_path}, {KleeSettings.provider_id}")
-
-    @db_transaction
-    async def update_global_model_settings(
-            self,
-            local_mode: bool,
-            model_id: str,
-            model_name: str,
-            model_path: str,
-            provider_id: str,
-            session=None
-    ):
-        stmt = select(GlobalSettings)
-        result = await session.execute(stmt)
-        result = result.scalars().one_or_none()
-
-        result.local_mode = local_mode
-        result.model_id = model_id
-        result.model_name = model_name
-        result.model_path = model_path
-        result.provider_id = provider_id
-        result.update_at = datetime.now().timestamp()
-
-        try:
-            session.commit()
-            session.refresh(result)
-        except Exception as e:
-            logger.error(f"Init global model settings error: {e}")
-            session.rollback()
-
 
