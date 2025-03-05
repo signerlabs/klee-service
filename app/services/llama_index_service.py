@@ -7,7 +7,6 @@ import logging
 
 import yaml
 
-# datetime
 from datetime import datetime
 
 from llama_index.core.response_synthesizers import ResponseMode
@@ -476,8 +475,9 @@ class LlamaIndexService:
             chat_engine = AgentRunner.from_llm(
                 tools=agent_tools,
                 llm=llamaSettings.llm,
-                system_prompt="",  # TODO: Add system prompt
+            #     system_prompt="",  # TODO: Add system prompt
                 verbose=False,
+                streaming=True,
                 chat_history=chat_history
             )
             
@@ -755,17 +755,11 @@ class LlamaIndexService:
 
             # 设置问答模板不需要根据上下文内容
             text_qa_prompt = """
-                "if the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content. \n"
-                "answer the query.\n"
                 "Query: {query_str}\n"
             """
 
-            print(f"当前的QA模板内容为: {text_qa_prompt} \n")
-
             # 总结提示模板
             summary_prompt = """
-                "if the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content. \n"
-                "answer the query.\n"
                 "Query: {query_str}\n"
             """
 

@@ -615,7 +615,14 @@ class ChatService:
                         note_ids=json.loads(a_conversation.note_ids),
                         file_infos=file_infos
                     )
+                    
                     response = query_engine.query(question + language)
+                    # chat_engine = await self.llama_index_service.get_chat_engine(
+                    #     note_ids=json.loads(a_conversation.note_ids),
+                    #     file_infos=file_infos
+                    # )
+
+                    # response = await chat_engine.chat(question)
 
                     return StreamingResponse(
                         self.generate_data(
