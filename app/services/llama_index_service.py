@@ -440,7 +440,7 @@ class LlamaIndexService:
                 base_retriever,
                 index.storage_context,
                 simple_ratio_thresh=0.5,
-                verbose=True,
+                verbose=False,
             )
 
             query_engine = RetrieverQueryEngine.from_args(
@@ -686,7 +686,7 @@ class LlamaIndexService:
                     base_retriever,
                     index.storage_context,
                     simple_ratio_thresh=0.5,
-                    verbose=True,
+                    verbose=False,
                 )
                 retrievers.append(retriever)
 
@@ -701,7 +701,7 @@ class LlamaIndexService:
                     base_retriever,
                     index.storage_context,
                     simple_ratio_thresh=0.2,
-                    verbose=True,
+                    verbose=False,
                 )
 
                 retrievers.append(retriever)
@@ -720,7 +720,7 @@ class LlamaIndexService:
                         base_retriever,
                         index.storage_context,
                         simple_ratio_thresh=0.2,
-                        verbose=True,
+                        verbose=False,
                     )
                     retrievers.append(retriever)
 
@@ -772,7 +772,7 @@ class LlamaIndexService:
                 base_retriever,
                 index.storage_context,
                 simple_ratio_thresh=0.2,
-                verbose=True,
+                verbose=False,
             )
             retrievers.append(retriever)
 
