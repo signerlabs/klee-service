@@ -32,8 +32,10 @@ from app.model.chat_message import ChatMessage as Llama_chat_message, Conversati
 from llama_index.core.base.llms.types import ChatMessage as LlmChatMessage, MessageRole
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 class ChatService:
     def __init__(self):
@@ -45,7 +47,7 @@ class ChatService:
             conversation_id: str,
             Authorization: str = Header(None),
             request: Request = Request,
-            session = None
+            session=None
     ):
         """
         Create or update conversation title
@@ -58,7 +60,8 @@ class ChatService:
             ResponseContent: Response containing conversation data
         """
         try:
-            stmt = select(Llama_conversation).where(Llama_conversation.id == conversation_id)
+            stmt = select(Llama_conversation).where(
+                Llama_conversation.id == conversation_id)
             results = await session.execute(stmt)
             conversation = results.scalars().one_or_none()
 
@@ -89,18 +92,8 @@ class ChatService:
                 language = ""
 
             question = """
-            Generate a concise and descriptive title for the following conversation, highlighting the core topic or key focus of the discussion. The title should be short and accurate, ideally between 8-12 words. If the conversation is broad in scope, use a more general summary to reflect the main idea.
-            Conversation Content:
+            Generate a short and descriptive title in {language} for the following content, only in string:
             {msg_content}
-            Sample Outputs:
-
-            If the discussion is about technical development: Exploring OVFlow Feature Design
-
-            If the discussion is about AI technologies: Discussion on AI Text Generation Strategies
-
-            If the discussion is about everyday topics: Sharing Daily Life Stories
-
-            {language}
             """.format(msg_content=msg_content, language=language)
 
             if conversation.local_mode is True:
@@ -113,7 +106,8 @@ class ChatService:
                     )
                     response = query_engine.query(question)
 
-                    conversation.title = re.sub(r'<think>.*?</think>', '', response.response, flags=re.DOTALL)
+                    conversation.title = re.sub(
+                        r'<think>.*?</think>', '', response.response, flags=re.DOTALL)
 
                     session.add(conversation)
 
@@ -125,7 +119,8 @@ class ChatService:
                         streaming=False
                     )
                     response = query_engine.query(question + language)
-                    conversation.title = response.response.replace("\\n", "").strip()
+                    conversation.title = response.response.replace(
+                        "\\n", "").strip()
                     session.add(conversation)
                     return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
             else:
@@ -254,7 +249,8 @@ class ChatService:
             result = await session.execute(select(Llama_conversation).filter(Llama_conversation.id == conversation_id))
             conversation = result.scalar_one_or_none()
             if conversation is None:
-                raise HTTPException(status_code=404, detail="Conversation not found")
+                raise HTTPException(
+                    status_code=404, detail="Conversation not found")
 
             await session.delete(conversation)
             return ResponseContent(error_code=0, message="Successfully deleted conversation", data=None)
@@ -277,11 +273,13 @@ class ChatService:
             ResponseContent: Response indicating success/failure
         """
         try:
-            stmt = select(Llama_chat_message).where(Llama_chat_message.id == message_id)
+            stmt = select(Llama_chat_message).where(
+                Llama_chat_message.id == message_id)
             result = await session.execute(stmt)
             message = result.scalar_one_or_none()
             if message is None:
-                raise HTTPException(status_code=404, detail="Message not found")
+                raise HTTPException(
+                    status_code=404, detail="Message not found")
 
             create_time = message.create_time
             stmt = (select(Llama_chat_message).where(Llama_chat_message.create_time == create_time)
@@ -291,7 +289,8 @@ class ChatService:
 
             delete_ids = []
             for msg in new_messages:
-                del_stmt = delete(Llama_chat_message).where(Llama_chat_message.id == msg.id)
+                del_stmt = delete(Llama_chat_message).where(
+                    Llama_chat_message.id == msg.id)
                 await session.execute(del_stmt)
                 delete_ids.append(msg.id)
             await session.commit()
@@ -313,7 +312,8 @@ class ChatService:
             result = await session.execute(select(Llama_conversation).filter(Llama_conversation.id == conversation_id))
             conversation = result.scalar_one_or_none()
             if conversation is None:
-                raise HTTPException(status_code=404, detail="Conversation not found")
+                raise HTTPException(
+                    status_code=404, detail="Conversation not found")
 
             conversation.title = request.title
             conversation.is_pin = request.is_pin
@@ -335,16 +335,18 @@ class ChatService:
         except Exception as e:
             await session.rollback()
             logger.error(f"update_conversation error:{str(e)}")
-            raise HTTPException(status_code=500, detail=f"Update conversational information failed: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Update conversational information failed: {str(e)}")
 
     @db_transaction
     async def llama_get_conversation_message(
             self,
             conversation_id: str = None,
-            session = None
+            session=None
     ):
         try:
-            stmt = select(Llama_conversation).where(Llama_conversation.id == conversation_id)
+            stmt = select(Llama_conversation).where(
+                Llama_conversation.id == conversation_id)
             result = await session.execute(stmt)
             conversation = result.scalars().first()
 
@@ -354,7 +356,8 @@ class ChatService:
             if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
                 os.system(f"ollama stop {conversation.model_id}")
 
-            stmt = select(Llama_chat_message).where(Llama_chat_message.conversation_id == conversation_id)
+            stmt = select(Llama_chat_message).where(
+                Llama_chat_message.conversation_id == conversation_id)
             result_messages = await session.execute(stmt)
             message_list = result_messages.scalars().all()
 
@@ -440,7 +443,8 @@ class ChatService:
         try:
             async with async_session() as session:
                 # 查询指定的 ChatConversation 记录
-                stmt = select(ChatConversation).where(ChatConversation.id == conversation_id)
+                stmt = select(ChatConversation).where(
+                    ChatConversation.id == conversation_id)
                 result = await session.execute(stmt)
                 conversation = result.scalar_one_or_none()
 
@@ -512,10 +516,11 @@ class ChatService:
             chat_request: LLamaChatRequest,
             Authorization: str = Header(None),
             request: Request = Request,
-            session = None
+            session=None
     ):
         try:
-            stmt = select(Llama_conversation).where(Llama_conversation.id == chat_request.conversation_id)
+            stmt = select(Llama_conversation).where(
+                Llama_conversation.id == chat_request.conversation_id)
             result = await session.execute(stmt)
             a_conversation = result.scalar_one_or_none()
 
@@ -548,7 +553,8 @@ class ChatService:
                 else:
                     api_base_url = None
                     if not provider_id == SystemTypeDiffModelType.OPENAI.value and not provider_id == SystemTypeDiffModelType.CLAUDE.value:
-                        diy_stmt = select(BaseConfig).where(BaseConfig.id == provider_id)
+                        diy_stmt = select(BaseConfig).where(
+                            BaseConfig.id == provider_id)
                         result = await session.execute(diy_stmt)
                         config_data = result.scalars().one_or_none()
                         if not str(a_conversation.model_name).find("claude") == -1:
@@ -568,7 +574,7 @@ class ChatService:
                                 api_base_url = "https://cloud.luchentech.com/api/maas"
 
                     await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_id, api_type=api_type,
-                                                       api_base_url=api_base_url)
+                                                            api_base_url=api_base_url)
 
             chat_messages = results.scalars().all()
 
@@ -614,15 +620,15 @@ class ChatService:
                         note_ids=json.loads(a_conversation.note_ids),
                         file_infos=file_infos
                     )
-                    
+
                     response = query_engine.query(question + language)
 
                     return StreamingResponse(
                         self.generate_data(
-                                        session=session,
-                                           response=response,
-                                           question=question,
-                                           conversation_id=chat_request.conversation_id),
+                            session=session,
+                            response=response,
+                            question=question,
+                            conversation_id=chat_request.conversation_id),
                         media_type="text/event-stream"
                     )
                 else:
@@ -659,7 +665,8 @@ class ChatService:
                                    f".If no text is provided, please provide your own response and organize the answer. \n"""
 
                     response = query_engine.query(real_question)
-                    response_coroutine = self.generate_data(response=response, question=question, conversation_id=chat_request.conversation_id)
+                    response_coroutine = self.generate_data(
+                        response=response, question=question, conversation_id=chat_request.conversation_id)
                     return StreamingResponse(response_coroutine,
                                              media_type="text/event-stream")
             else:
@@ -685,7 +692,7 @@ class ChatService:
                     )
 
                     content = await self.llama_index_service.get_retrieve_notes_content(question=question + language,
-                                                                                   query_engine=query_engine)
+                                                                                        query_engine=query_engine)
                     context = content
 
                     del os.environ["IS_TESTING"]
@@ -706,11 +713,11 @@ class ChatService:
                     messages_list.append({
                         "role": "user",
                         "content": f"1、{language}，using as many sentences as possible from the text I provided: "
-                                   f"```{context}``` to support the answer"
-                                   f"2、If the answer is unrelated to the question, you can freely express yourself"
-                                   f"3、Do not directly output the provided text content"
-                                   f"4、If no text is provided, please provide your own response and organize the answer."
-                                   f"My question is：{question}"
+                        f"```{context}``` to support the answer"
+                        f"2、If the answer is unrelated to the question, you can freely express yourself"
+                        f"3、Do not directly output the provided text content"
+                        f"4、If no text is provided, please provide your own response and organize the answer."
+                        f"My question is：{question}"
                     })
 
                     request_data = {
@@ -721,7 +728,7 @@ class ChatService:
 
                     return StreamingResponse(
                         self.generate_data_2(url, headers, request_data, conversation_id=a_conversation.id,
-                                        question=question),
+                                             question=question),
                         media_type="text/event-stream")
                 else:
                     query_engine = await self.llama_index_service.combine_query(
@@ -743,13 +750,13 @@ class ChatService:
     ):
         """
         Generate streaming response data for chat messages
-        
+
         Args:
             session: Database session
             response: Response from LLM
             question: User's question
             conversation_id: ID of the conversation
-            
+
         Yields:
             Server-sent events containing chat message data
         """
@@ -821,7 +828,8 @@ class ChatService:
             # Update message status on completion
             rot_message.status = "success"
             async with async_session() as new_session:
-                stmt = select(Llama_chat_message).where(Llama_chat_message.id == rot_message.id)
+                stmt = select(Llama_chat_message).where(
+                    Llama_chat_message.id == rot_message.id)
                 result = await new_session.execute(stmt)
                 db_rot_message = result.scalar_one()
                 db_rot_message.content = rot_message.content
@@ -838,7 +846,8 @@ class ChatService:
             # Handle error case
             async with async_session() as error_session:
                 async with error_session.begin():
-                    stmt = select(Llama_chat_message).where(Llama_chat_message.id == rot_message.id)
+                    stmt = select(Llama_chat_message).where(
+                        Llama_chat_message.id == rot_message.id)
                     result = await error_session.execute(stmt)
                     error_message = result.scalar_one()
                     error_message.status = "error"
@@ -958,9 +967,12 @@ class ChatService:
                         await session.commit()
                     else:
                         async for item in response.aiter_bytes():
-                            rot_message.content += item.decode(encoding="utf-8")
-                            message_json_rob_obj['content'] += item.decode(encoding="utf-8")
-                            data = "data: " + json.dumps(message_json_rob_obj) + "\n\n"
+                            rot_message.content += item.decode(
+                                encoding="utf-8")
+                            message_json_rob_obj['content'] += item.decode(
+                                encoding="utf-8")
+                            data = "data: " + \
+                                json.dumps(message_json_rob_obj) + "\n\n"
                             yield "event: pending\n"
                             yield f"{data}"
                         rot_message.status = "success"
@@ -992,6 +1004,7 @@ class ChatService:
             session.add(rot_message)
 
             await session.commit()
+
 
 def get_db_session() -> AsyncSession:
     """
