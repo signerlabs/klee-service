@@ -1,19 +1,8 @@
 # klee-service
 
-Klee is a fully open-source platform that brings secure, local AI to your desktop.
+This GitHub repository is used to start the Klee Python service.
 
-For more information, visit our <u>[Website](https://kleedesktop.com/)</u>.
-
-![Klee Screenshot](public/KleeScreenShot.png)
-
-At its core, Klee is built on:
-- <u>[Ollama](https://ollama.com/)</u>: For running local LLMs quickly and efficiently.
-- <u>[LlamaIndex](https://www.llamaindex.ai/)</u>: As the data framework.
-
-With Klee, you can:
-- Download and run open-source large language models on your desktop with a single click - no terminal or technical background required.
-- Utilize the built-in knowledge base to store your local and private files with complete data security.
-- Save all LLM responses to your knowledge base using the built-in markdown notes feature.
+If you are trying to run Klee locally for the first time or want to understand some basic information, start with [Klee Client](https://github.com/signerlabs/klee-service) please.
 
 ## 🔧 Installation
 
@@ -24,7 +13,7 @@ With Klee, you can:
 - Python 3.12.4+
 - pip 23.2.1+
 
-### 2. You should finish the steps from <u>[Klee Client](https://github.com/signerlabs/klee-client)</u> and then start here.
+### 2. You should finish the steps from [Klee Client](https://github.com/signerlabs/klee-client) and then start here.
 
 ### 3. Clone the repository
 
@@ -151,9 +140,5 @@ pyinstaller --uac-admin --icon=klee-main.ico  --additional-hooks-dir=./hooks --a
 
 ## 📖 Technology Stack
 
-- <u>[Python](https://kleedesktop.com/)</u>
-- <u>[LlamaIndex](https://www.llamaindex.ai/)</u>
-- <u>[Ollama](https://ollama.com/)</u>
-- <u>[Sqlalchemy](https://www.sqlalchemy.org/)</u>
-- <u>[FastAPI](https://fastapi.tiangolo.com/)</u>
+[Python](https://kleedesktop.com/) | [LlamaIndex](https://www.llamaindex.ai/) | [Ollama](https://ollama.com/) | [Sqlalchemy](https://www.sqlalchemy.org/) | [FastAPI](https://fastapi.tiangolo.com/)
 
