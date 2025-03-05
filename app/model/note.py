@@ -37,7 +37,7 @@ class Note(Base):
     local_mode = Column(Boolean, default=False, nullable=True)
 
     def __init__(self, id, folder_id, title, content, type, status, is_pin, create_at, update_at, delete_at=0,
-                 html_content="", local_mode=False):
+                 html_content="", local_mode=True):
         self.id = id
         self.folder_id = folder_id
         self.title = title

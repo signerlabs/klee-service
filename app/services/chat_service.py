@@ -223,7 +223,7 @@ class ChatService:
                 "language_id": chat_conversation.language_id,
                 "model_id": chat_conversation.model_id,
                 "provider_id": chat_conversation.provider_id,
-                "local_model": chat_conversation.local_mode,
+                "local_mode": chat_conversation.local_mode,
                 "system_prompt": chat_conversation.model_path,
                 "model_path": chat_conversation.model_path,
                 "model_name": chat_conversation.model_name,
@@ -617,12 +617,6 @@ class ChatService:
                     )
                     
                     response = query_engine.query(question + language)
-                    # chat_engine = await self.llama_index_service.get_chat_engine(
-                    #     note_ids=json.loads(a_conversation.note_ids),
-                    #     file_infos=file_infos
-                    # )
-
-                    # response = await chat_engine.chat(question)
 
                     return StreamingResponse(
                         self.generate_data(

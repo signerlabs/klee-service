@@ -278,15 +278,15 @@ async def update_table_columns(table_name: str):
         table = metadata.tables[table_name]
 
         # 检查列是否已经存在
-        if 'local_model' not in table.columns:
+        if 'local_mode' not in table.columns:
             # 使用 ALTER TABLE 添加新列
             async with engine.begin() as conn:
                 # 使用 text() 包装 SQL 语句
-                stmt = text(f'ALTER TABLE {table_name} ADD COLUMN local_model INTEGER DEFAULT 1')
+                stmt = text(f'ALTER TABLE {table_name} ADD COLUMN local_mode INTEGER DEFAULT 1')
                 await conn.execute(stmt)
 
-            logger.info(f"Column 'local_model' added to table '{table_name}'.")
+            logger.info(f"Column 'local_mode' added to table '{table_name}'.")
         else:
-            logger.info(f"Column 'local_model' already exists in table '{table_name}'.")
+            logger.info(f"Column 'local_mode' already exists in table '{table_name}'.")
 
 

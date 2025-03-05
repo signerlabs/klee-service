@@ -268,8 +268,24 @@ class LlamaIndexService:
         """
         # Get data from a folder
         documents = SimpleDirectoryReader(
-            source,
-            file_metadata=lambda _: {}
+            source
+        ).load_data()
+
+        return documents
+
+    def load_text_document_default(
+            self,
+            source:str
+    ):
+        """
+        load text document from file or folder
+        Args:
+            source: source
+        Returns:
+            documents
+        """
+        documents = SimpleDirectoryReader(
+            source
         ).load_data()
 
         return documents
@@ -747,7 +763,7 @@ class LlamaIndexService:
            """
 
         if len(retrievers) == 0:
-            documents = self.load_text_document(f"{KleeSettings.temp_file_url}default")
+            documents = self.load_text_document_default(f"{KleeSettings.temp_file_url}default")
             index = self.build_auto_merging_index(documents=documents, save_dir=f"{KleeSettings.vector_url}default")
             base_retriever = index.as_retriever(
                 similarity_top_k=12
@@ -762,11 +778,13 @@ class LlamaIndexService:
 
             # 设置问答模板不需要根据上下文内容
             text_qa_prompt = """
+                "If no corresponding text is found, use your maximum ability to answer."
                 "Query: {query_str}\n"
             """
 
             # 总结提示模板
             summary_prompt = """
+                "If no corresponding text is found, use your maximum ability to answer."
                 "Query: {query_str}\n"
             """
 
@@ -789,9 +807,9 @@ class LlamaIndexService:
         auto_merging_engine = RetrieverQueryEngine.from_args(
             qf_retriever,
             streaming=streaming,
-            text_qa_template=PromptTemplate(text_qa_prompt),
-            refine_template=PromptTemplate(refine_prompt),
-            summary_template=PromptTemplate(summary_prompt),
+            # text_qa_template=PromptTemplate(text_qa_prompt),
+            # refine_template=PromptTemplate(refine_prompt),
+            # summary_template=PromptTemplate(summary_prompt),
             use_async=True,
             response_mode=ResponseMode.COMPACT
         )
@@ -836,11 +854,6 @@ class LlamaIndexService:
                 local_mode=True
             )
             session.add(global_settings)
-            try:
-                session.commit()
-            except Exception as e:
-                logger.error(f"Init global model settings error: {e}")
-                session.rollback()
 
             KleeSettings.local_mode = True
             KleeSettings.model_id = None

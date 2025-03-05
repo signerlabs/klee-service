@@ -38,7 +38,7 @@ class Conversation(Base):
     is_pin: bool = Column(Boolean, default=False, nullable=False)
     # 扩充基础配置在这里
     model_name: str = Column(String, default="")
-    local_mode: str = Column(Boolean, default=False, nullable=False)
+    local_mode: str = Column(Boolean, default=True, nullable=False)
     provider_id: str = Column(String, default="", nullable=False)
     model_id: str = Column(String, default="", nullable=False)
     language_id: str = Column(String, default="", nullable=False)
