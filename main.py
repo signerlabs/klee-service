@@ -2,6 +2,7 @@ import argparse
 import logging
 import multiprocessing
 import os
+import codecs
 from typing import Optional
 
 import uvicorn
@@ -171,8 +172,6 @@ def main():
             workers=1,
             log_level="info"
         )
-
-        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
         
     except Exception as e:
         logger.error(f"Failed to start server: {e}")

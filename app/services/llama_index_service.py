@@ -68,21 +68,26 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(leve
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 class LlamaIndexError(Exception):
     """Base exception class for LlamaIndex service errors"""
     pass
+
 
 class ModelLoadError(LlamaIndexError):
     """Raised when loading a model fails"""
     pass
 
+
 class ConfigError(LlamaIndexError):
     """Raised when there is a configuration error"""
     pass
 
+
 class PersistenceError(LlamaIndexError):
     """Raised when persisting data fails"""
     pass
+
 
 class LlamaIndexService:
     def __init__(self):
@@ -129,18 +134,18 @@ class LlamaIndexService:
                     f"{SystemTypeDiffTempFileUrl.WIN_PATH.value}default",
                     SystemEmbedUrl.WIN_PATH.value
                 ]
-                
+
                 for directory in directories:
                     os.makedirs(directory, exist_ok=True)
-                    
+
                 # Create default file
                 with open(f"{SystemTypeDiffTempFileUrl.WIN_PATH.value}default/default.txt", "w") as f:
                     f.write("")
-                    
+
                 # Write config
                 with open(SystemTypeDiffConfigUrl.WIN_OS.value, 'w') as f:
                     yaml.dump(config_data, f, default_flow_style=False)
-                    
+
             elif os_type == SystemTypeDiff.MAC.value:
                 directories = [
                     SystemTypeDiffLlmUrl.MAC_PATH.value,
@@ -150,18 +155,18 @@ class LlamaIndexService:
                     SystemTiktokenUrl.MAC_PATH.value,
                     SystemEmbedUrl.MAC_PATH.value
                 ]
-                
+
                 for directory in directories:
                     os.makedirs(directory, exist_ok=True)
-                    
+
                 os.environ["TIKTOKEN_CACHE_DIR"] = f"{SystemTiktokenUrl.MAC_PATH.value}"
-                
+
                 with open(f"{SystemTypeDiffTempFileUrl.MAC_PATH.value}default/default.txt", "w") as f:
                     f.write("")
-                    
+
                 with open(SystemTypeDiffConfigUrl.MAC_OS.value, 'w') as f:
                     yaml.dump(config_data, f, default_flow_style=False)
-                    
+
         except Exception as e:
             logger.error(f"Failed to setup directories: {str(e)}")
             raise ConfigError(f"Directory setup failed: {str(e)}")
@@ -262,7 +267,10 @@ class LlamaIndexService:
         load text document from file or folder
         """
         # Get data from a folder
-        documents = SimpleDirectoryReader(source).load_data()
+        documents = SimpleDirectoryReader(
+            source,
+            file_metadata=lambda _: {}
+        ).load_data()
 
         return documents
 
@@ -278,11 +286,11 @@ class LlamaIndexService:
             gc.collect()
 
     async def load_llm(
-        self,
-        provider_id: Optional[str] = None,
-        model_name: Optional[str] = None,
-        api_type: Optional[str] = None,
-        api_base_url: str = "https://api.deepseek.com",
+            self,
+            provider_id: Optional[str] = None,
+            model_name: Optional[str] = None,
+            api_type: Optional[str] = None,
+            api_base_url: str = "https://api.deepseek.com",
     ) -> None:
         """Load language model based on provider and configuration
         
@@ -323,10 +331,10 @@ class LlamaIndexService:
             raise ModelLoadError(f"Failed to load model {model_name}: {str(e)}")
 
     def _get_cloud_llm(
-        self, 
-        api_type: str,
-        model_name: str,
-        api_base_url: str
+            self,
+            api_type: str,
+            model_name: str,
+            api_base_url: str
     ):
         """Get cloud-based language model instance
         
@@ -390,11 +398,11 @@ class LlamaIndexService:
         return auto_merging_index
 
     def get_auto_merging_query_engine(
-        self,
-        index: VectorStoreIndex,
-        similarity_top_k: int = 12,
-        rerank_top_n: int = 6,
-        streaming: bool = True
+            self,
+            index: VectorStoreIndex,
+            similarity_top_k: int = 12,
+            rerank_top_n: int = 6,
+            streaming: bool = True
     ) -> RetrieverQueryEngine:
         """Get auto merging query engine
         
@@ -411,36 +419,36 @@ class LlamaIndexService:
             base_retriever = index.as_retriever(
                 similarity_top_k=similarity_top_k
             )
-            
+
             retriever = AutoMergingRetriever(
                 base_retriever,
                 index.storage_context,
                 simple_ratio_thresh=0.5,
                 verbose=True,
             )
-            
+
             query_engine = RetrieverQueryEngine.from_args(
                 retriever,
                 streaming=streaming,
                 rerank_top_n=rerank_top_n,
             )
-            
+
             logger.info("Successfully created auto merging query engine")
             return query_engine
-            
+
         except Exception as e:
             logger.error(f"Failed to create query engine: {str(e)}")
             raise Exception(f"Query engine creation failed: {str(e)}")
 
     async def get_chat_engine(
-        self,
-        knowledge_ids: Optional[List[str]] = None,
-        knowledge_list: Optional[List[Knowledge]] = None,
-        note_ids: Optional[List[str]] = None,
-        note_list: Optional[List[Note]] = None,
-        file_infos: Optional[Dict] = None,
-        chat_history: Optional[List] = None,
-        language: Optional[str] = None
+            self,
+            knowledge_ids: Optional[List[str]] = None,
+            knowledge_list: Optional[List[Knowledge]] = None,
+            note_ids: Optional[List[str]] = None,
+            note_list: Optional[List[Note]] = None,
+            file_infos: Optional[Dict] = None,
+            chat_history: Optional[List] = None,
+            language: Optional[str] = None
     ):
         """Get chat engine with configured tools and history
         
@@ -459,31 +467,31 @@ class LlamaIndexService:
         try:
             agent_tools = []
             chat_history = chat_history or []
-            
+
             # Process knowledge IDs
             if knowledge_ids:
                 agent_tools.extend(await self._process_knowledge_ids(knowledge_ids))
-                
+
             # Process notes
             if note_list:
                 agent_tools.extend(await self._process_notes(note_list))
-                
+
             # If no tools, add default
             if not agent_tools:
                 agent_tools.append(await self._get_default_tool())
-                
+
             chat_engine = AgentRunner.from_llm(
                 tools=agent_tools,
                 llm=llamaSettings.llm,
-            #     system_prompt="",  # TODO: Add system prompt
+                #     system_prompt="",  # TODO: Add system prompt
                 verbose=False,
                 streaming=True,
                 chat_history=chat_history
             )
-            
+
             logger.info("Successfully created chat engine")
             return chat_engine
-            
+
         except Exception as e:
             logger.error(f"Failed to create chat engine: {str(e)}")
             raise Exception(f"Chat engine creation failed: {str(e)}")
@@ -496,7 +504,7 @@ class LlamaIndexService:
                 # Create and add tool
                 pass
         return tools
-        
+
     async def _process_notes(self, notes: List[Note]) -> List[QueryEngineTool]:
         """Process notes to create query tools"""
         tools = []
@@ -625,7 +633,7 @@ class LlamaIndexService:
                         os.makedirs(f"{KleeSettings.temp_file_url}{file_id}")
                     shutil.copy(file_path, f"{KleeSettings.temp_file_url}{file_id}")
                     await self.persist_file_to_disk_2(path=f"{KleeSettings.temp_file_url}{file_id}",
-                                                 store_dir=f"{KleeSettings.vector_url}{file_id}")
+                                                      store_dir=f"{KleeSettings.vector_url}{file_id}")
 
             session.add_all(path_list)
         except Exception:
@@ -706,10 +714,10 @@ class LlamaIndexService:
                "---------------------\n"
                "{context_str}\n"
                "---------------------\n"
-               "Given the context information and not prior knowledge, "
+               "Given the context information and not prior knowledge. \n"
+               "If the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content, just use your maximum ability to answer. \n"
                "answer the query.\n"
                "Query: {query_str}\n"
-               "Answer: "
            """
 
         # 精炼改进提示模板
@@ -724,7 +732,6 @@ class LlamaIndexService:
                "Given the new context, refine the original answer to better "
                "answer the query. "
                "If the context isn't useful, return the original answer.\n"
-               "Refined Answer: "
            """
 
         # 总结提示模板
@@ -733,10 +740,10 @@ class LlamaIndexService:
                "---------------------\n"
                "{context_str}\n"
                "---------------------\n"
-               "Given the information from multiple sources and not prior knowledge, "
+               "Given the information from multiple sources and not prior knowledge. \n"
+               "If the quoted content is empty or unrelated to the question, there is no need to answer based on the context of the quoted content, just use your maximum ability to answer. \n"
                "answer the query.\n"
                "Query: {query_str}\n"
-               "Answer: "
            """
 
         if len(retrievers) == 0:
@@ -785,7 +792,7 @@ class LlamaIndexService:
             text_qa_template=PromptTemplate(text_qa_prompt),
             refine_template=PromptTemplate(refine_prompt),
             summary_template=PromptTemplate(summary_prompt),
-            use_async = True,
+            use_async=True,
             response_mode=ResponseMode.COMPACT
         )
 
@@ -846,4 +853,3 @@ class LlamaIndexService:
             KleeSettings.model_name = result.model_name
             KleeSettings.model_path = result.model_path
             KleeSettings.provider_id = result.provider_id
-
