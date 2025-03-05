@@ -257,7 +257,6 @@ class ChatService:
                 raise HTTPException(status_code=404, detail="Conversation not found")
 
             await session.delete(conversation)
-            await session.commit()
             return ResponseContent(error_code=0, message="Successfully deleted conversation", data=None)
         except Exception as e:
             logger.error(f"delete_conversation error: {str(e)}")
