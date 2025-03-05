@@ -2,7 +2,7 @@
 
 This GitHub repository is used to start the Klee Python service.
 
-If you are trying to run Klee locally for the first time or want to understand some basic information, start with [Klee Client](https://github.com/signerlabs/klee-service) please.
+If you are trying to run Klee locally for the first time or want to understand some basic information, start with [Klee](https://github.com/signerlabs/klee) please.
 
 ## 🔧 Installation
 
@@ -13,7 +13,7 @@ If you are trying to run Klee locally for the first time or want to understand s
 - Python 3.12.4+
 - pip 23.2.1+
 
-### 2. You should finish the steps from [Klee Client](https://github.com/signerlabs/klee-client) and then start here.
+### 2. You should finish the steps from [Klee](https://github.com/signerlabs/klee) and then start here.
 
 ### 3. Clone the repository
 
@@ -108,7 +108,7 @@ The default port number is 6190, if you want to change the port number, you can 
 python main.py --port 6191
 ```
 
-### 7. Go back to <u>[Klee Client](https://github.com/signerlabs/klee-client)</u> and finish the rest of the initialization process.
+### 7. Go back to [Klee](https://github.com/signerlabs/klee) and finish the rest of the initialization process.
 
 ## ☁️ Cloud Configuration - Not released yet
 
