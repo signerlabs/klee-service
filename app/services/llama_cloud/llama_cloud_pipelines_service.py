@@ -2,9 +2,11 @@ import logging
 import os
 
 from dotenv import load_dotenv
+from llama_cloud import PipelineCreate
 from llama_cloud.client import AsyncLlamaCloud
 
 from app.services.llama_cloud.llama_cloud_embedding_service import LlamaCloudEmbeddingService
+from app.model.klee_settings import Settings as KleeSettings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,7 +40,24 @@ class LlamaCloudPipelinesService:
             "embedding_config_id": embedding_config_id,
             "name": name
         }
-        response = await self.async_client.pipelines.create_pipeline(request=request_data)
+
+        logger.info(f"Creating pipeline with name: {name} and embedding config id: {embedding_config_id} and project id: {project_id} and organization id: {organization_id}")
+
+        pipeline_create_request = PipelineCreate(
+            embedding_model_config_id=embedding_config_id,
+            name=name,
+            transform_config=None,
+            data_sink_id= None,
+            preset_retrieval_parameters = None,
+            llama_parse_parameters = None,
+            embedding_config=None,
+            configured_transformations=None,
+            data_sink=None,
+            eval_parameters=None,
+            pipeline_type=None,
+            managed_pipeline_id=None
+        )
+        response = await self.async_client.pipelines.create_pipeline(project_id=project_id,request=pipeline_create_request)
         logger.info(f"Pipeline created with id: {response.id}")
         return response
 
