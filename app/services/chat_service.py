@@ -23,6 +23,7 @@ from app.model.base_config import BaseConfig
 from app.model.knowledge import File
 from app.model.note import Note
 from app.services.client_sqlite_service import db_transaction
+from app.config.env_config import config
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.llama_index_service import LlamaIndexService
@@ -177,56 +178,77 @@ class ChatService:
     @db_transaction
     async def create_conversation(
             self,
+            token,
             llama_request: LlamaConversationRequest,
             session
     ):
         try:
-            now_time = datetime.now().timestamp()
-            chat_conversation = Llama_conversation(
-                id=str(uuid.uuid4()),
-                title="",
-                create_time=now_time,
-                is_pin=False,
-                knowledge_ids=json.dumps([]),
-                note_ids=json.dumps([]),
-                create_at=now_time,
-                update_at=now_time,
-                provider_id=llama_request.provider_id,
-                local_mode=llama_request.local_mode,
-                language_id=llama_request.language_id,
-                model_path=llama_request.model_path,
-                model_name=llama_request.model_name,
-                model_id=llama_request.model_id
-            )
+            if KleeSettings.local_mode is True:
+                now_time = datetime.now().timestamp()
+                chat_conversation = Llama_conversation(
+                    id=str(uuid.uuid4()),
+                    title="",
+                    create_time=now_time,
+                    is_pin=False,
+                    knowledge_ids=json.dumps([]),
+                    note_ids=json.dumps([]),
+                    create_at=now_time,
+                    update_at=now_time,
+                    provider_id=llama_request.provider_id,
+                    local_mode=llama_request.local_mode,
+                    language_id=llama_request.language_id,
+                    model_path=llama_request.model_path,
+                    model_name=llama_request.model_name,
+                    model_id=llama_request.model_id
+                )
 
-            if chat_conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value \
-                    or chat_conversation.provider_id == SystemTypeDiffModelType.KLEE.value \
-                    or chat_conversation.provider_id == SystemTypeDiffModelType.LOCAL.value:
-                chat_conversation.local_mode = True
+                if chat_conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value \
+                        or chat_conversation.provider_id == SystemTypeDiffModelType.KLEE.value \
+                        or chat_conversation.provider_id == SystemTypeDiffModelType.LOCAL.value:
+                    chat_conversation.local_mode = True
+                else:
+                    chat_conversation.local_mode = False
+
+                session.add(chat_conversation)
+
+                conversation_info = {
+                    "id": chat_conversation.id,
+                    "title": chat_conversation.title,
+                    "create_time": chat_conversation.create_time,
+                    "is_pin": chat_conversation.is_pin,
+                    "knowledge_ids": [],
+                    "note_ids": [],
+                    "language_id": chat_conversation.language_id,
+                    "model_id": chat_conversation.model_id,
+                    "provider_id": chat_conversation.provider_id,
+                    "local_mode": chat_conversation.local_mode,
+                    "system_prompt": chat_conversation.model_path,
+                    "model_path": chat_conversation.model_path,
+                    "model_name": chat_conversation.model_name,
+                    "create_at": chat_conversation.create_at,
+                    "update_at": chat_conversation.update_at
+                }
+
+                return ResponseContent(error_code=0, message="", data={"conversation": conversation_info})
             else:
-                chat_conversation.local_mode = False
-
-            session.add(chat_conversation)
-
-            conversation_info = {
-                "id": chat_conversation.id,
-                "title": chat_conversation.title,
-                "create_time": chat_conversation.create_time,
-                "is_pin": chat_conversation.is_pin,
-                "knowledge_ids": [],
-                "note_ids": [],
-                "language_id": chat_conversation.language_id,
-                "model_id": chat_conversation.model_id,
-                "provider_id": chat_conversation.provider_id,
-                "local_mode": chat_conversation.local_mode,
-                "system_prompt": chat_conversation.model_path,
-                "model_path": chat_conversation.model_path,
-                "model_name": chat_conversation.model_name,
-                "create_at": chat_conversation.create_at,
-                "update_at": chat_conversation.update_at
-            }
-
-            return ResponseContent(error_code=0, message="", data={"conversation": conversation_info})
+                json_data = asdict(llama_request)
+                json_data.update({
+                    "knowledge_ids": json.dumps([]),
+                    "note_ids": json.dumps([]),
+                    "create_at": None,
+                    "update_at": None,
+                    "delete_at": None,
+                    "create_time": None,
+                    "title": "",
+                    "is_pin": False
+                })
+                response = await KleeSettings.async_http_client.post(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/conversation/create",
+                    json=json_data
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Create conversation successfully", data=response.json())
         except Exception as e:
             logger.error(f"create_conversation error:{str(e)}")
             raise Exception(f"{e}")
@@ -235,6 +257,7 @@ class ChatService:
     async def delete_conversation(
             self,
             session,
+            token,
             conversation_id: str
     ):
         """
@@ -242,18 +265,27 @@ class ChatService:
         Args:
             session: Database session
             conversation_id: ID of the conversation to delete
+            token: Authorization token
         Returns:
             ResponseContent: Response indicating success/failure
         """
         try:
-            result = await session.execute(select(Llama_conversation).filter(Llama_conversation.id == conversation_id))
-            conversation = result.scalar_one_or_none()
-            if conversation is None:
-                raise HTTPException(
-                    status_code=404, detail="Conversation not found")
+            if KleeSettings.local_mode is True:
+                result = await session.execute(select(Llama_conversation).filter(Llama_conversation.id == conversation_id))
+                conversation = result.scalar_one_or_none()
+                if conversation is None:
+                    raise HTTPException(
+                        status_code=404, detail="Conversation not found")
 
-            await session.delete(conversation)
-            return ResponseContent(error_code=0, message="Successfully deleted conversation", data=None)
+                await session.delete(conversation)
+                return ResponseContent(error_code=0, message="Successfully deleted conversation", data=None)
+            else:
+                response = await KleeSettings.async_http_client.delete(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/conversation/{conversation_id}"
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Successfully deleted conversation", data=None)
         except Exception as e:
             logger.error(f"delete_conversation error: {str(e)}")
             raise Exception(f"Failed to delete conversation: {str(e)}")
@@ -341,61 +373,73 @@ class ChatService:
     @db_transaction
     async def llama_get_conversation_message(
             self,
+            token,
             conversation_id: str = None,
             session=None
     ):
         try:
-            stmt = select(Llama_conversation).where(
-                Llama_conversation.id == conversation_id)
-            result = await session.execute(stmt)
-            conversation = result.scalars().first()
+            if KleeSettings.local_mode is True:
+                stmt = select(Llama_conversation).where(
+                    Llama_conversation.id == conversation_id)
+                result = await session.execute(stmt)
+                conversation = result.scalars().first()
 
-            if conversation is None:
-                return ResponseContent(error_code=-1, message="conversation not found", data={})
+                if conversation is None:
+                    return ResponseContent(error_code=-1, message="conversation not found", data={})
 
-            if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
-                os.system(f"ollama stop {conversation.model_id}")
+                if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
+                    os.system(f"ollama stop {conversation.model_id}")
 
-            stmt = select(Llama_chat_message).where(
-                Llama_chat_message.conversation_id == conversation_id)
-            result_messages = await session.execute(stmt)
-            message_list = result_messages.scalars().all()
+                stmt = select(Llama_chat_message).where(
+                    Llama_chat_message.conversation_id == conversation_id)
+                result_messages = await session.execute(stmt)
+                message_list = result_messages.scalars().all()
 
-            conversation_info = {
-                "id": conversation.id,
-                "knowledge_ids": json.loads(conversation.knowledge_ids),
-                "note_ids": json.loads(conversation.note_ids),
-                "title": conversation.title,
-                "is_pin": conversation.is_pin,
-                "create_time": conversation.create_time,
-                "local_mode": conversation.local_mode,
-                "provider_id": conversation.provider_id,
-                "model_id": conversation.model_id,
-                "language_id": conversation.language_id,
-                "system_prompt": conversation.system_prompt,
-                "model_path": conversation.model_path,
-                "create_at": conversation.create_at,
-                "update_at": conversation.update_at
-            }
+                conversation_info = {
+                    "id": conversation.id,
+                    "knowledge_ids": json.loads(conversation.knowledge_ids),
+                    "note_ids": json.loads(conversation.note_ids),
+                    "title": conversation.title,
+                    "is_pin": conversation.is_pin,
+                    "create_time": conversation.create_time,
+                    "local_mode": conversation.local_mode,
+                    "provider_id": conversation.provider_id,
+                    "model_id": conversation.model_id,
+                    "language_id": conversation.language_id,
+                    "system_prompt": conversation.system_prompt,
+                    "model_path": conversation.model_path,
+                    "create_at": conversation.create_at,
+                    "update_at": conversation.update_at
+                }
 
-            message_infos = []
-            if len(message_list) > 0:
-                message_infos = [
-                    {
-                        "id": message.id,
-                        "role": message.role,
-                        "content": message.content,
-                        "create_time": message.create_time,
-                        "status": message.status,
-                        "error_message": message.error_message,
-                        "create_at": message.create_at,
-                        "update_at": message.update_at,
-                    }
-                    for message in message_list
-                ]
-            return ResponseContent(error_code=0, message="",
-                                   data={"conversation": conversation_info, "messages": message_infos})
+                message_infos = []
+                if len(message_list) > 0:
+                    message_infos = [
+                        {
+                            "id": message.id,
+                            "role": message.role,
+                            "content": message.content,
+                            "create_time": message.create_time,
+                            "status": message.status,
+                            "error_message": message.error_message,
+                            "create_at": message.create_at,
+                            "update_at": message.update_at,
+                        }
+                        for message in message_list
+                    ]
+                return ResponseContent(error_code=0, message="",
+                                       data={"conversation": conversation_info, "messages": message_infos})
+            else:
+                response = await KleeSettings.async_http_client.get(
+                    headers={"Authorization": f"Bearer {token}"}, url=f"{config.klee_cloud_api_url}/conversation/{conversation_id}")
+                response.raise_for_status()
 
+                message_response = await KleeSettings.async_http_client.get(
+                    headers={"Authorization": f"Bearer {token}"}, url=f"{config.klee_cloud_api_url}/message/{conversation_id}/messages")
+                message_response.raise_for_status()
+
+                return ResponseContent(error_code=0, message="",
+                                       data={"conversation": response.json(), "messages": message_response.json()})
         except Exception as e:
             logger.error(f"get_conversation_message error:{str(e)}")
             raise Exception("Get conversation message failed")
@@ -404,32 +448,41 @@ class ChatService:
     async def get_all_chat_conversations(
             self,
             session,
-            keyword: str = None
+            token,
+            keyword: str = None,
     ):
         try:
-            stmt = select(Llama_conversation).filter(Llama_conversation.title.like(f"%{keyword}%")).order_by(
-                Llama_conversation.create_time.desc())
-            result = await session.execute(stmt)
-            conversations = result.scalars().all()
+            if KleeSettings.local_mode is True:
+                stmt = select(Llama_conversation).filter(Llama_conversation.title.like(f"%{keyword}%")).order_by(
+                    Llama_conversation.create_time.desc())
+                result = await session.execute(stmt)
+                conversations = result.scalars().all()
 
-            if len(conversations) < 0:
-                return ResponseContent(error_code=0, message="Get all conversations successfully", data=[])
+                if len(conversations) < 0:
+                    return ResponseContent(error_code=0, message="Get all conversations successfully", data=[])
 
-            conversations_list = [
-                {
-                    "id": cv.id,
-                    "title": cv.title,
-                    "create_time": cv.create_time,
-                    "create_at": cv.create_at,
-                    "update_at": cv.update_at,
-                    "is_pin": cv.is_pin,
-                    "knowledge_ids": json.loads(cv.knowledge_ids),
-                    "note_ids": json.loads(cv.note_ids)
-                }
-                for cv in conversations
-            ]
+                conversations_list = [
+                    {
+                        "id": cv.id,
+                        "title": cv.title,
+                        "create_time": cv.create_time,
+                        "create_at": cv.create_at,
+                        "update_at": cv.update_at,
+                        "is_pin": cv.is_pin,
+                        "knowledge_ids": json.loads(cv.knowledge_ids),
+                        "note_ids": json.loads(cv.note_ids)
+                    }
+                    for cv in conversations
+                ]
 
-            return ResponseContent(error_code=0, message="Get all conversations successfully", data=conversations_list)
+                return ResponseContent(error_code=0, message="Get all conversations successfully", data=conversations_list)
+            else:
+                response = await KleeSettings.async_http_client.get(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/conversation/all?keyword={keyword}"
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Get all conversations successfully", data=response.json())
         except Exception as e:
             logger.error(f"Get all conversations failed: {str(e)}")
             return ResponseContent(error_code=1, message=f"Get all conversations failed: {str(e)}", data=None)
@@ -437,40 +490,48 @@ class ChatService:
     @db_transaction
     async def get_conversation_detail(
             self,
-            session,
+            token,
             conversation_id: str
     ):
         try:
-            async with async_session() as session:
-                # 查询指定的 ChatConversation 记录
-                stmt = select(ChatConversation).where(
-                    ChatConversation.id == conversation_id)
-                result = await session.execute(stmt)
-                conversation = result.scalar_one_or_none()
+            if KleeSettings.local_mode is True:
+                async with async_session() as session:
+                    # 查询指定的 ChatConversation 记录
+                    stmt = select(ChatConversation).where(
+                        ChatConversation.id == conversation_id)
+                    result = await session.execute(stmt)
+                    conversation = result.scalar_one_or_none()
 
-                if not conversation:
-                    return ResponseContent(error_code=1, message="Conversation not found", data=None)
+                    if not conversation:
+                        return ResponseContent(error_code=1, message="Conversation not found", data=None)
 
-                if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
-                    os.system(f"ollama stop {conversation.model_id}")
+                    if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
+                        os.system(f"ollama stop {conversation.model_id}")
 
-                # 构造返回的数据结构
-                conversation_detail = {
-                    "id": conversation.id,
-                    "title": conversation.title,
-                    "latestMessage": conversation.latestMessage,
-                    "knowledgeIds": conversation.knowledgeIds,
-                    "noteIds": conversation.noteIds,
-                    "fileIds": conversation.fileIds,
-                    "createAt": conversation.createAt,
-                    "updateAt": conversation.updateAt,
-                    "systemPrompt": conversation.systemPrompt,
-                    "replyLanguage": conversation.replyLanguage,
-                    "llmId": conversation.llmId,
-                    "knowledgeContent": conversation.knowledgeContent
-                }
+                    # 构造返回的数据结构
+                    conversation_detail = {
+                        "id": conversation.id,
+                        "title": conversation.title,
+                        "latestMessage": conversation.latestMessage,
+                        "knowledgeIds": conversation.knowledgeIds,
+                        "noteIds": conversation.noteIds,
+                        "fileIds": conversation.fileIds,
+                        "createAt": conversation.createAt,
+                        "updateAt": conversation.updateAt,
+                        "systemPrompt": conversation.systemPrompt,
+                        "replyLanguage": conversation.replyLanguage,
+                        "llmId": conversation.llmId,
+                        "knowledgeContent": conversation.knowledgeContent
+                    }
 
-                return ResponseContent(error_code=0, message="Get conversation detail successfully", data=conversation_detail)
+                    return ResponseContent(error_code=0, message="Get conversation detail successfully", data=conversation_detail)
+            else:
+                response = await KleeSettings.async_http_client.get(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/conversation/{conversation_id}"
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Get conversation detail successfully", data=response.json())
         except Exception as e:
             logger.error(f"Get conversation detail failed: {str(e)}")
             return ResponseContent(error_code=1, message=f"Get conversation detail failed: {str(e)}", data=None)
@@ -740,6 +801,23 @@ class ChatService:
                                              media_type="text/event-stream")
         except requests.RequestException as e:
             logger.error(f"Error: {e.response.status_code}- {e.response.text}")
+
+    async def cloud_chat(
+            self,
+            token,
+            chat_request: LLamaChatRequest
+    ):
+        try:
+            response = await KleeSettings.async_http_client.post(
+                headers={"Authorization": f"Bearer {token}"},
+                url=f"{config.klee_cloud_api_url}/chat/chat",
+                json=asdict(chat_request)
+            )
+            response.raise_for_status()
+            return ResponseContent(error_code=0, message="Send chat request successfully", data=response.content)
+        except Exception as e:
+            logger.error(f"Send chat request failed: {str(e)}")
+            return ResponseContent(error_code=1, message=f"Send chat request failed: {str(e)}", data=None)
 
     async def generate_data(
             self,

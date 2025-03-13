@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Dict, Any
 import datetime
 import json
@@ -21,6 +22,7 @@ from app.model.knowledge import File
 from app.services.client_sqlite_service import db_transaction
 from app.services.llama_index_service import LlamaIndexService
 from app.model.klee_settings import Settings as KleeSettings
+from app.config.env_config import config
 
 # 配置日志
 logging.basicConfig(
@@ -211,102 +213,153 @@ class BaseService:
     @db_transaction
     async def update_conversation_setting(
             self,
+            token,
             llama_request: LlamaConversationRequest,
             session
     ):
         try:
-            stmt = select(Conversation).where(Conversation.id == llama_request.id)
-            result = await session.execute(stmt)
-            conversation = result.scalars().first()
+            if KleeSettings.local_mode is True:
+                stmt = select(Conversation).where(Conversation.id == llama_request.id)
+                result = await session.execute(stmt)
+                conversation = result.scalars().first()
 
-            if conversation.model_id != llama_request.model_id:
-                self.llama_index_service.release_memory()
-            elif llama_request.model_path != conversation.model_path:
-                self.llama_index_service.release_memory()
+                if conversation is None:
+                    KleeSettings.local_mode = True
+                    return ResponseContent(error_code=0, message="Change local mode successfulli", data=llama_request)
 
-            KleeSettings.local_mode = llama_request.local_mode
+                if conversation.model_id != llama_request.model_id:
+                    self.llama_index_service.release_memory()
+                elif llama_request.model_path != conversation.model_path:
+                    self.llama_index_service.release_memory()
 
-            conversation.knowledge_ids = json.dumps(llama_request.knowledge_ids, ensure_ascii=False)
-            conversation.note_ids = json.dumps(llama_request.note_ids, ensure_ascii=False)
-            conversation.local_mode = llama_request.local_mode
-            conversation.language_id = llama_request.language_id
-            conversation.provider_id = llama_request.provider_id
-            conversation.model_id = llama_request.model_id
-            conversation.language_id = llama_request.language_id
-            conversation.system_prompt = llama_request.system_prompt
-            conversation.model_name = llama_request.model_name
-            conversation.model_path = llama_request.model_path
-            provider_id = llama_request.provider_id
-            model_id = llama_request.model_id
-            model_path = llama_request.model_path
-            model_name = llama_request.model_name
+                KleeSettings.local_mode = llama_request.local_mode
 
-            stmt_global = select(GlobalSettings)
-            result_global = await session.execute(stmt_global)
-            global_settings = result_global.scalars().first()
+                conversation.knowledge_ids = json.dumps(llama_request.knowledge_ids, ensure_ascii=False)
+                conversation.note_ids = json.dumps(llama_request.note_ids, ensure_ascii=False)
+                conversation.local_mode = llama_request.local_mode
+                conversation.language_id = llama_request.language_id
+                conversation.provider_id = llama_request.provider_id
+                conversation.model_id = llama_request.model_id
+                conversation.language_id = llama_request.language_id
+                conversation.system_prompt = llama_request.system_prompt
+                conversation.model_name = llama_request.model_name
+                conversation.model_path = llama_request.model_path
+                provider_id = llama_request.provider_id
+                model_id = llama_request.model_id
+                model_path = llama_request.model_path
+                model_name = llama_request.model_name
 
-            if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value and conversation.model_id != global_settings.model_id:
-                if global_settings.provider_id == SystemTypeDiffModelType.OLLAMA.value:
-                    try:
-                        os.system(f"ollama stop {global_settings.model_id}")
-                    except Exception as e:
-                        logging.error(f"ollama stop {global_settings.model_id} failed, {str(e)}")
-                        pass
+                stmt_global = select(GlobalSettings)
+                result_global = await session.execute(stmt_global)
+                global_settings = result_global.scalars().first()
 
-            if global_settings is not None:
-                if global_settings.provider_id != provider_id \
-                        or global_settings.model_id != model_id \
-                        or global_settings.model_path != model_path \
-                        or global_settings.model_name != model_name:
-                    global_settings.provider_id = provider_id
-                    global_settings.model_id = model_id
-                    global_settings.model_path = model_path
-                    global_settings.model_name = model_name
-                    global_settings.local_mode = llama_request.local_mode
+                if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value and conversation.model_id != global_settings.model_id:
+                    if global_settings.provider_id == SystemTypeDiffModelType.OLLAMA.value:
+                        try:
+                            os.system(f"ollama stop {global_settings.model_id}")
+                        except Exception as e:
+                            logging.error(f"ollama stop {global_settings.model_id} failed, {str(e)}")
+                            pass
 
-                    KleeSettings.local_mode = llama_request.local_mode
-                    KleeSettings.provider_id = provider_id
-                    KleeSettings.model_id = model_id
-                    KleeSettings.model_path = model_path
-                    KleeSettings.model_name = model_name
+                if global_settings is not None:
+                    if global_settings.provider_id != provider_id \
+                            or global_settings.model_id != model_id \
+                            or global_settings.model_path != model_path \
+                            or global_settings.model_name != model_name:
+                        global_settings.provider_id = provider_id
+                        global_settings.model_id = model_id
+                        global_settings.model_path = model_path
+                        global_settings.model_name = model_name
+                        global_settings.local_mode = llama_request.local_mode
 
-                    KleeSettings.un_load = True
+                        KleeSettings.local_mode = llama_request.local_mode
+                        KleeSettings.provider_id = provider_id
+                        KleeSettings.model_id = model_id
+                        KleeSettings.model_path = model_path
+                        KleeSettings.model_name = model_name
 
-                    with self.llama_index_service.release_memory():
-                        Settings.llm = None
-                        self.llama_index_service.release_memory()
+                        KleeSettings.un_load = True
 
-            session.add(conversation)
-            await session.flush()
+                        with self.llama_index_service.release_memory():
+                            Settings.llm = None
+                            self.llama_index_service.release_memory()
 
-            file_infos = {}
-            knowledge_ids = json.loads(conversation.knowledge_ids)
-            if len(knowledge_ids) > 0:
-                for knowledge_id in knowledge_ids:
-                    stmt = select(File).where(File.knowledgeId == knowledge_id)
-                    result = await session.execute(stmt)
-                    files = result.scalars().all()
+                session.add(conversation)
+                await session.flush()
 
-                    if len(files) > 0:
-                        file_infos[knowledge_id] = files
+                file_infos = {}
+                knowledge_ids = json.loads(conversation.knowledge_ids)
+                if len(knowledge_ids) > 0:
+                    for knowledge_id in knowledge_ids:
+                        stmt = select(File).where(File.knowledgeId == knowledge_id)
+                        result = await session.execute(stmt)
+                        files = result.scalars().all()
 
-            response_data = {
-                "id": conversation.id,
-                "knowledge_ids": conversation.knowledge_ids,
-                "note_ids": conversation.note_ids,
-                "local_mode": conversation.local_mode,
-                "provider_id": conversation.provider_id,
-                # "is_pin": conversation.is_pin,
-                "model_id": conversation.model_id,
-                "model_name": conversation.model_name,
-                "language_id": conversation.language_id,
-                "system_prompt": conversation.system_prompt,
-                "model_path": conversation.model_path
-            }
-            return ResponseContent(error_code=0, message="Update successful", data=response_data)
+                        if len(files) > 0:
+                            file_infos[knowledge_id] = files
+
+                response_data = {
+                    "id": conversation.id,
+                    "knowledge_ids": conversation.knowledge_ids,
+                    "note_ids": conversation.note_ids,
+                    "local_mode": conversation.local_mode,
+                    "provider_id": conversation.provider_id,
+                    # "is_pin": conversation.is_pin,
+                    "model_id": conversation.model_id,
+                    "model_name": conversation.model_name,
+                    "language_id": conversation.language_id,
+                    "system_prompt": conversation.system_prompt,
+                    "model_path": conversation.model_path
+                }
+                return ResponseContent(error_code=0, message="Update successful", data=response_data)
+            else:
+                json_data = asdict(llama_request)
+                json_data.update({
+                    "knowledge_ids": json.dumps(llama_request.knowledge_ids, ensure_ascii=False),
+                    "note_ids": json.dumps(llama_request.note_ids, ensure_ascii=False)
+                })
+                response = await KleeSettings.async_http_client.put(
+                    f"{config.klee_cloud_api_url}/conversation/{llama_request.id}",
+                    headers= {"Authorization": f"Bearer {token}"},
+                    json= json_data
+                )
+                response.raise_for_status()
+                response_data = response.json()
+                logger.info(f"update_conversation_setting response: {response_data}")
+                KleeSettings.local_mode = False
+                return ResponseContent(error_code=0, message="Update successful", data=response_data)
         except Exception as e:
             logger.error(f"update_conversation_setting error: {e}")
             return ResponseContent(error_code=-1, message=f"Update failed: {str(e)}", data={})
 
     async def get_status(self):
         return ResponseContent(error_code=0, message="Service is running", data={})
+
+    @db_transaction
+    async def change_global_setting(
+            self,
+            request: LlamaConversationRequest,
+            session
+    ):
+        """
+        修改全局配置
+        Args:
+            request:
+            session
+        Returns:
+
+        """
+        try:
+            logger.info(f"change_global_setting request: {request}")
+            stmt_global = select(GlobalSettings)
+            result_global = await session.execute(stmt_global)
+            global_settings = result_global.scalars().first()
+
+            global_settings.local_mode = request.local_mode
+            await session.flush()
+
+            KleeSettings.local_mode = request.local_mode
+            return ResponseContent(error_code=0, message="Update successful", data={})
+        except Exception as e:
+            logger.error(f"change_global_setting error: {e}")
+            return ResponseContent(error_code=-1, message=f"Update failed: {str(e)}", data={})

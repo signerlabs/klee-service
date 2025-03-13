@@ -22,6 +22,7 @@ class Config:
         # 读取环境变量
         self.openai_key = os.getenv('OPENAI_KEY')
         self.llama_cloud_api_key = os.getenv('LLAMA_CLOUD_API_KEY')
+        self.klee_cloud_api_url = os.getenv('KLEE_CLOUD_API_URL')
 
 # 全局配置实例
 config = Config(env="local")  # 默认使用开发环境

@@ -30,7 +30,14 @@ class LlamaCloudRetrieversService:
             project_id=project_id,
             request=RetrieverCreate(
                 name=retriever_name,
-                pipelines=pipelines
+                pipelines= [
+                    {
+                        "name": "my pipeline",
+                        "description": "A useful pipeline",
+                        "pipeline_id": pipelines[0].id,
+                        "preset_retrieval_parameters": {}
+                    }
+                ]
             )
         )
         logger.info(f"Retriever {retriever_name} created successfully")

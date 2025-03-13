@@ -1,8 +1,7 @@
 import logging
-from typing import Optional, List
+from typing import Optional, List, Any, Coroutine
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 
 from app.model.note import CreateNoteRequest, NoteResponse
 from app.model.Response import ResponseContent
@@ -34,135 +33,162 @@ class NoteController:
 
     async def get_all_notes(
             self,
+            token,
             keyword: Optional[str] = None
-    ) -> List[NoteResponse]:
+    ):
         """Get all notes
         
         Args:
             keyword: Search keyword
-            
+            token: JWT token
         Returns:
             List of notes
         """
         try:
-            return await self.note_service.get_all_notes(keyword)
+            return await self.note_service.get_all_notes(token=token, keyword=keyword)
         except Exception as e:
             return await self.handle_note_exception(e)
 
     async def get_note_by_id(
             self,
+            token,
             note_id: str
-    ) -> NoteResponse:
+    ):
         """Get note by ID
         
         Args:
             note_id: Note ID
-            
+            token: JWT token
         Returns:
             Note details
         """
         try:
-            return await self.note_service.get_note_by_id(note_id)
+            return await self.note_service.get_note_by_id(token=token, note_id=note_id)
         except Exception as e:
             return await self.handle_note_exception(e)
 
     async def create_note(
             self,
+            token,
             request: CreateNoteRequest,
-    ) -> NoteResponse:
+    ):
         """Create new note
         
         Args:
+            token: JWT token
             request: Create note request
             
         Returns:
             Created note
         """
         try:
-            return await self.note_service.create_note(request)
+            return await self.note_service.create_note(
+                token=token,
+                request=request
+            )
         except Exception as e:
             return await self.handle_note_exception(e)
 
     async def update_note(
             self,
+            token,
             note_id: str,
             request: CreateNoteRequest,
-    ) -> NoteResponse:
+    ):
         """Update note
         
         Args:
             note_id: Note ID
             request: Update note request
-            
+            token: JWT token
         Returns:
             Updated note
         """
         try:
-            return await self.note_service.update_note(note_id, request)
+            return await self.note_service.update_note(token=token, note_id=note_id, request=request)
         except Exception as e:
             return await self.handle_note_exception(e)
 
     async def delete_note(
             self,
+            token,
             note_id: str
     ) -> ResponseContent:
         """Delete note
         
         Args:
             note_id: Note ID
-            
+            token: JWT token
         Returns:
             Delete result
         """
         try:
-            return await self.note_service.delete_note(note_id)
+            return await self.note_service.delete_note(token=token, note_id=note_id)
         except Exception as e:
             return await self.handle_note_exception(e)
 
 
 # API Route Handlers
-@router.get("/", response_model=List[NoteResponse])
+@router.get("/")
 async def get_all_notes(
         keyword: Optional[str] = None,
+        Authorization: str = Header(None),
         controller: NoteController = Depends()
-) -> List[NoteResponse]:
+):
     """Get all notes"""
-    return await controller.get_all_notes(keyword)
+    return await controller.get_all_notes(token=Authorization, keyword=keyword)
 
 
-@router.get("/{note_id}", response_model=NoteResponse)
+@router.get("/{note_id}")
 async def get_note_by_id(
         note_id: str,
+        Authorization: str = Header(None),
         controller: NoteController = Depends()
-) -> NoteResponse:
+):
     """Get note by ID"""
-    return await controller.get_note_by_id(note_id)
+    return await controller.get_note_by_id(
+        token=Authorization,
+        note_id=note_id
+    )
 
 
 @router.post("/", response_model=NoteResponse)
 async def create_note(
         request: CreateNoteRequest,
+        Authorization: str = Header(None),
         controller: NoteController = Depends()
-) -> NoteResponse:
+):
     """Create new note"""
-    return await controller.create_note(request)
+    return await controller.create_note(
+        token=Authorization,
+        request=request
+    )
 
 
 @router.put("/{note_id}", response_model=NoteResponse)
 async def update_note(
         note_id: str,
         request: CreateNoteRequest,
+        Authorization: str = Header(None),
         controller: NoteController = Depends()
-) -> NoteResponse:
+):
     """Update note"""
-    return await controller.update_note(note_id, request)
+    return await controller.update_note(token=Authorization, note_id=note_id, request=request)
 
 
 @router.delete("/{note_id}")
 async def delete_note(
         note_id: str,
+        Authorization: str = Header(None),
         controller: NoteController = Depends()
 ) -> ResponseContent:
     """Delete note"""
-    return await controller.delete_note(note_id)
+    return await controller.delete_note(token=Authorization, note_id=note_id)
 
+@router.get("/synchronize-files")
+async def synchronize_files(
+        Authorization: str = Header(None),
+        controller: NoteController = Depends()
+) -> ResponseContent:
+    """Synchronize note files"""
+    return ResponseContent(error_code=0, message="Synchronize files successfully", data=None)

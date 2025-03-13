@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 
 # 主要用于配置对话的基本设置
 from app.model.LlamaRequest import LlamaConversationRequest
@@ -48,9 +48,10 @@ class BaseController:
 
     async def update_conversation_setting(
             self,
+            token,
             llama_request: LlamaConversationRequest
     ):
-        return await self.base_service.update_conversation_setting(llama_request)
+        return await self.base_service.update_conversation_setting(token=token, llama_request=llama_request)
 
 @router.post("/custom_providers")
 async def create_providers(
@@ -97,6 +98,14 @@ async def status(
 @router.put("/conversation/setting")
 async def update_conversation_setting(
         llama_request: LlamaConversationRequest,
+        Authorization: str = Header(None),
         controller: BaseController = Depends(BaseController)
 ):
-    return await controller.update_conversation_setting(llama_request)
+    return await controller.update_conversation_setting(token=Authorization, llama_request=llama_request)
+
+@router.put("/conversation/setting/local_mode")
+async def update_conversation_setting_local_mode(
+        llama_request: LlamaConversationRequest,
+        controller: BaseController = Depends(BaseController)
+):
+    return await controller.base_service.change_global_setting(request=llama_request)

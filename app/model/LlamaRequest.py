@@ -45,7 +45,7 @@ class LlamaBaseSetting(BaseModel):
     baseUrl: Optional[str] = None
     models: List[LlamaBaseModel] = None
 
-
+@dataclass
 class LLamaChatRequest(BaseModel):
     question: str = None
     # knowledge_ids: List[str] = None
@@ -53,9 +53,9 @@ class LLamaChatRequest(BaseModel):
     # access_token: str = None
     conversation_id: str = None  # 原则上这里不允许为None
 
-
+@dataclass
 class LlamaConversationRequest(BaseModel):
-    id: Optional[str] = None
+    id: str = None
     note_ids: List[str] = None
     knowledge_ids: List[str] = None
     is_pin: bool = None,
@@ -63,14 +63,14 @@ class LlamaConversationRequest(BaseModel):
     create_at: float = None,
     create_time: float = None,
     update_at: float = None,
-    title: Optional[str] = None,
-    provider_id: Optional[str] = None
-    model_id: Optional[str] = None
-    model_name: Optional[str] = None
-    model_path: Optional[str] = None
-    language_id: Optional[str] = None
-    system_prompt: Optional[str] = None
-    language: Optional[str] = None
+    title: str = None,
+    provider_id: str = None
+    model_id: str = None
+    model_name: str = None
+    model_path: str = None
+    language_id: str = None
+    system_prompt: str = None
+    language: str = None
 
 
 class LLamaFileRequest(BaseModel):

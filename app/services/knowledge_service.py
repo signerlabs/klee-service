@@ -6,8 +6,9 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any, Coroutine
 
+import httpx
 from sqlalchemy import select, or_, update, delete, true, false
 from starlette import status
 from starlette.exceptions import HTTPException
@@ -17,10 +18,10 @@ from app.model.Response import ResponseContent
 from app.model.knowledge import File, Knowledge, KnowledgeCreate, EmbedStatus, KnowledgeResponse
 from app.services.client_sqlite_service import db_transaction
 from app.model.LlamaRequest import LlamaKnowledge, LlamaFileList, LLamaFileImportRequest
-from app.services.llama_cloud.llama_cloud_file_service import LlamaCloudFileService
+from app.config.env_config import config
 
-from app.services.llama_index_service import LlamaIndexService
 from app.model.klee_settings import Settings as KleeSettings
+from app.services.llama_index_service import LlamaIndexService
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -28,52 +29,63 @@ logger = logging.getLogger(__name__)
 
 class KnowledgeService:
     def __init__(self):
+        self.time_out = 300
         self.llama_index_service = LlamaIndexService()
-        self.llama_cloud_file_service = LlamaCloudFileService()
 
     @db_transaction
     async def get_all_knowledge(
             self,
+            token,
             keyword: Optional[str] = None,
             session=None
-    ) -> ResponseContent:
+    ) -> ResponseContent | None:
         """
         Get all knowledge database entries
         Args:
+            token: User token
             keyword: Optional search keyword
             session: Database session
         Returns:
             ResponseContent: Response containing knowledge list
         """
+        logger.info(f"KleeSettings.local_mode: {KleeSettings.local_mode}")
         try:
-            stmt = select(Knowledge).where(Knowledge.parent_id == '')
-            if keyword:
-                stmt = stmt.filter(
-                    or_(
-                        Knowledge.title.ilike(f"%{keyword}%"),
-                        Knowledge.description.ilike(f"%{keyword}%")
-                    )
-                )
             if KleeSettings.local_mode is True:
+                stmt = select(Knowledge).where(Knowledge.parent_id == '')
+                if keyword:
+                    stmt = stmt.filter(
+                        or_(
+                            Knowledge.title.ilike(f"%{keyword}%"),
+                            Knowledge.description.ilike(f"%{keyword}%")
+                        )
+                    )
                 stmt = stmt.filter(Knowledge.local_mode == true())
+
+                result = await session.execute(stmt)
+                knowledge_list = result.scalars().all()
+
+                knowledge_data = [
+                    asdict(k)
+                    for k in knowledge_list
+                ]
+
+                return ResponseContent(error_code=0, message="Successfully retrieved all knowledge entries", data=knowledge_data)
+
             else:
-                stmt = stmt.filter(Knowledge.local_mode == false())
-
-            result = await session.execute(stmt)
-            knowledge_list = result.scalars().all()
-
-            knowledge_data = [
-                asdict(k)
-                for k in knowledge_list
-            ]
-
-            return ResponseContent(error_code=0, message="Successfully retrieved all knowledge entries", data=knowledge_data)
+                headers = {"Authorization": f"Bearer {token}"}
+                response =  await KleeSettings.async_http_client.get(
+                    url=f"{config.klee_cloud_api_url}/knowledge/all",
+                    headers=headers,
+                )
+                logger.info(f"Get all knowledge response: {response.json()}")
+                return ResponseContent(error_code=0, message="Successfully retrieved all knowledge entries", data=response.json())
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to retrieve knowledge entries: {str(e)}")
 
     @db_transaction
     async def get_knowledge(
             self,
+            token,
             knowledge_id: str,
             session=None
     ):
@@ -81,63 +93,66 @@ class KnowledgeService:
         Get a specific knowledge entry
         Args:
             knowledge_id: ID of the knowledge entry
+            token: User token
             session: Database session
         Returns:
             ResponseContent: Response containing knowledge data
         """
         try:
-            stmt = select(Knowledge).where(Knowledge.id == knowledge_id)
-            result = await session.execute(stmt)
-            knowledge = result.scalars().first()
+            if KleeSettings.local_mode is True:
+                stmt = select(Knowledge).where(Knowledge.id == knowledge_id)
+                result = await session.execute(stmt)
+                knowledge = result.scalars().first()
 
-            if not knowledge:
-                raise HTTPException(status_code=404, detail="Knowledge entry not found")
+                if not knowledge:
+                    raise HTTPException(status_code=404, detail="Knowledge entry not found")
 
-            knowledge_dict = asdict(knowledge)
+                knowledge_dict = asdict(knowledge)
 
-            return ResponseContent(error_code=0, message="Successfully retrieved knowledge entry", data=knowledge_dict)
+                return ResponseContent(error_code=0, message="Successfully retrieved knowledge entry", data=knowledge_dict)
+            else:
+                headers = {"Authorization": f"Bearer {token}"}
+                response = await KleeSettings.async_http_client.get(
+                    url=f"{config.klee_cloud_api_url}/knowledge/{knowledge_id}",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Successfully retrieved knowledge entry", data=response.json())
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to retrieve knowledge entry: {str(e)}")
 
     @db_transaction
     async def get_all_files(
             self,
+            token,
             knowledge_id: str,
             session=None
     ):
         """
         Get all files associated with a knowledge entry
         Args:
+            token: User token
             knowledge_id: ID of the knowledge entry
             session: Database session
         Returns:
             ResponseContent: Response containing file list
         """
         try:
-            stmt = select(File).where(File.knowledgeId == knowledge_id)
-            result = await session.execute(stmt)
-            files = result.scalars().all()
-
             if KleeSettings.local_mode is True:
+                stmt = select(File).where(File.knowledgeId == knowledge_id)
+                result = await session.execute(stmt)
+                files = result.scalars().all()
+
                 return_files = [self.file_to_dict(k) for k in files]
                 return ResponseContent(error_code=0, message="Successfully retrieved files", data=return_files)
             else:
-                return_files = []
-                for file in files:
-                    cloud_file = await self.llama_cloud_file_service.get_file(file_id=file.id)
-                    logger.info(f"cloud_file: {cloud_file}")
-
-                    return_file = {
-                        "id": cloud_file.id,
-                        "os_time": cloud_file.created_at,
-                        "name": cloud_file.name,
-                        "path": "",
-                        "size": file.size,
-                        "create_at": cloud_file.created_at,
-                        "update_at": cloud_file.last_modified_at,
-                        "knowledgeId": file.knowledgeId
-                    }
-                    return_files.append(return_file)
+                headers = {"Authorization": f"Bearer {token}"}
+                response = await KleeSettings.async_http_client.get(
+                    headers=headers,
+                    url=f"{config.klee_cloud_api_url}/knowledge/{knowledge_id}/files"
+                )
+                response.raise_for_status()
+                return_files = response.json()
                 return ResponseContent(error_code=0, message="Successfully retrieved files", data=return_files)
 
         except Exception as e:
@@ -146,6 +161,7 @@ class KnowledgeService:
     @db_transaction
     async def create_knowledge(
             self,
+            token,
             knowledge: KnowledgeCreate,
             session=None
     ):
@@ -153,41 +169,52 @@ class KnowledgeService:
         Create a new knowledge entry
         Args:
             knowledge: Knowledge creation data
+            token: User token
             session: Database session
         Returns:
             ResponseContent: Response containing created knowledge data
         """
         try:
-            new_knowledge = Knowledge(
-                id=str(uuid.uuid4()),
-                timeStamp=datetime.now().timestamp(),
-                title=knowledge.title,
-                icon=knowledge.icon,
-                description=knowledge.description,
-                category=knowledge.category,
-                isPin=knowledge.isPin,
-                folder_path=knowledge.folder_path,
-                embed_status=EmbedStatus.EMBEDDING.value,
-                create_at=datetime.now().timestamp(),
-                update_at=datetime.now().timestamp(),
-                local_mode=KleeSettings.local_mode
-            )
-            session.add(new_knowledge)
-
             if KleeSettings.local_mode is True:
-                vector_url = f"{KleeSettings.vector_url}{new_knowledge.id}"
-                if not os.path.exists(vector_url):
-                    os.makedirs(vector_url, exist_ok=True)
+                new_knowledge = Knowledge(
+                    id=str(uuid.uuid4()),
+                    timeStamp=datetime.now().timestamp(),
+                    title=knowledge.title,
+                    icon=knowledge.icon,
+                    description=knowledge.description,
+                    category=knowledge.category,
+                    isPin=knowledge.isPin,
+                    folder_path=knowledge.folder_path,
+                    embed_status=EmbedStatus.EMBEDDING.value,
+                    create_at=datetime.now().timestamp(),
+                    update_at=datetime.now().timestamp(),
+                    local_mode=KleeSettings.local_mode
+                )
+                session.add(new_knowledge)
 
-                temp_file_url = f"{KleeSettings.temp_file_url}{new_knowledge.id}"
-                if not os.path.exists(temp_file_url):
-                    os.makedirs(temp_file_url, exist_ok=True)
-                temp_file_url += "/store.txt"
-                with open(temp_file_url, "w", encoding="utf-8") as file:
-                    file.write("")
+                if KleeSettings.local_mode is True:
+                    vector_url = f"{KleeSettings.vector_url}{new_knowledge.id}"
+                    if not os.path.exists(vector_url):
+                        os.makedirs(vector_url, exist_ok=True)
 
-            knowledge_response = asdict(new_knowledge)
-            return ResponseContent(error_code=0, message="Successfully created knowledge entry", data=knowledge_response)
+                    temp_file_url = f"{KleeSettings.temp_file_url}{new_knowledge.id}"
+                    if not os.path.exists(temp_file_url):
+                        os.makedirs(temp_file_url, exist_ok=True)
+                    temp_file_url += "/store.txt"
+                    with open(temp_file_url, "w", encoding="utf-8") as file:
+                        file.write("")
+
+                knowledge_response = asdict(new_knowledge)
+                return ResponseContent(error_code=0, message="Successfully created knowledge entry", data=knowledge_response)
+            else:
+                headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+                response = await KleeSettings.async_http_client.post(
+                    url=f"{config.klee_cloud_api_url}/knowledge/create",
+                    headers=headers,
+                    json=asdict(knowledge)
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Successfully created knowledge entry", data=response.json())
         except Exception as e:
             logger.error(f"Create knowledge error: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to create knowledge entry: {str(e)}")
@@ -195,69 +222,88 @@ class KnowledgeService:
     @db_transaction
     async def update_knowledge(
             self,
+            token,
             knowledge_id: str,
             knowledge: KnowledgeCreate,
             session=None
     ) -> KnowledgeResponse:
         try:
-            stmt = select(Knowledge).where(Knowledge.id == knowledge_id).with_for_update()
-            result = await session.execute(stmt)
-            existing_knowledge = result.scalar_one_or_none()
+            if KleeSettings.local_mode is True:
+                stmt = select(Knowledge).where(Knowledge.id == knowledge_id).with_for_update()
+                result = await session.execute(stmt)
+                existing_knowledge = result.scalar_one_or_none()
 
-            if not existing_knowledge:
-                raise HTTPException(status_code=404, detail="Database knowledge not found")
+                if not existing_knowledge:
+                    raise HTTPException(status_code=404, detail="Database knowledge not found")
 
-            update_stmt = (
-                update(Knowledge)
-                .where(Knowledge.id == knowledge_id)
-                .values(
-                    title=knowledge.title,
-                    icon=knowledge.icon,
-                    description=knowledge.description,
-                    category=knowledge.category,
-                    isPin=knowledge.isPin,
-                    folder_path=knowledge.folder_path
+                update_stmt = (
+                    update(Knowledge)
+                    .where(Knowledge.id == knowledge_id)
+                    .values(
+                        title=knowledge.title,
+                        icon=knowledge.icon,
+                        description=knowledge.description,
+                        category=knowledge.category,
+                        isPin=knowledge.isPin,
+                        folder_path=knowledge.folder_path
+                    )
+                    .returning(Knowledge)
                 )
-                .returning(Knowledge)
-            )
-            result = await session.execute(update_stmt)
-            updated_knowledge = result.scalar_one()
-            return KnowledgeResponse.from_orm(updated_knowledge)
+                result = await session.execute(update_stmt)
+                updated_knowledge = result.scalar_one()
+                return KnowledgeResponse.from_orm(updated_knowledge)
+            else:
+                headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+                response = await KleeSettings.async_http_client.put(
+                    headers=headers,
+                    url=f"{config.klee_cloud_api_url}/knowledge/{knowledge_id}",
+                    json=asdict(knowledge)
+                )
+                response.raise_for_status()
+                return response.json()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Update knowledge database failed: {str(e)}")
 
     @db_transaction
     async def delete_knowledge(
             self,
+            token,
             knowledge_id: str,
             session=None
     ):
         """
         Delete a knowledge entry and its associated files
         Args:
+            token: User token
             knowledge_id: ID of the knowledge entry to delete
             session: Database session
         Returns:
             ResponseContent: Response indicating success/failure
         """
         try:
-            stmt = select(Knowledge).where(Knowledge.id == knowledge_id)
-            result = await session.execute(stmt)
-            knowledge = result.scalar_one_or_none()
+            if KleeSettings.local_mode is True:
+                stmt = select(Knowledge).where(Knowledge.id == knowledge_id)
+                result = await session.execute(stmt)
+                knowledge = result.scalar_one_or_none()
 
-            if not knowledge:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge entry not found")
+                if not knowledge:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge entry not found")
 
-            await session.delete(knowledge)
+                await session.delete(knowledge)
 
-            if KleeSettings.local_mode is False:
                 stmt_file = select(File).where(File.knowledgeId == knowledge_id)
                 result_file = await session.execute(stmt_file)
                 files = result_file.scalars().all()
-                for file in files:
-                    await self.llama_cloud_file_service.delete_file(file_id=file.id)
 
-            return ResponseContent(error_code=0, message="Successfully deleted knowledge entry", data=None)
+                return ResponseContent(error_code=0, message="Successfully deleted knowledge entry", data=None)
+            else:
+                headers = {"Authorization": f"Bearer {token}"}
+                response = await KleeSettings.async_http_client.delete(
+                    headers=headers,
+                    url=f"{config.klee_cloud_api_url}/knowledge/{knowledge_id}"
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Successfully deleted knowledge entry", data=None)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete knowledge entry: {str(e)}")
 
@@ -368,6 +414,7 @@ class KnowledgeService:
     async def import_knowledge(
             self,
             knowledge_id: str,
+            token,
             file_import: LLamaFileImportRequest,
             session=None
     ):
@@ -377,6 +424,7 @@ class KnowledgeService:
             knowledge_id: Target knowledge entry ID
             file_import: File import request data
             session: Database session
+            token: User token
         Returns:
             ResponseContent: Response indicating success/failure
         """
@@ -397,7 +445,53 @@ class KnowledgeService:
                 await self.llama_index_service.import_exist_dir(knowledge_id=knowledge_id, dir_path=file_import.path,
                                                                 session=session)
             else:
-                await self.import_exist_dir_cloud(knowledge_id=knowledge_id, dir_path=file_import.path, session=session)
+                path_list = []
+                directory_path = Path(file_import.path)
+                for file in directory_path.rglob('*'):
+                    if file.is_file():
+                        file_path = str(file)
+                        title = ""
+                        if KleeSettings.os_type == SystemTypeDiff.WIN.value:
+                            title = file_path.split("\\")[-1]
+                        elif KleeSettings.os_type == SystemTypeDiff.MAC.value:
+                            title = file_path.split("/")[-1]
+                        file_id = str(uuid.uuid4())
+
+                        # if file_path
+                        if file_path.find("DS_Store") != -1:
+                            continue
+
+                        # upload file to cloud
+                        upload_file_response = await KleeSettings.async_http_client.post(
+                            headers={"Authorization": f"Bearer {token}"},
+                            url=f"{config.klee_cloud_api_url}/file/upload-temp",
+                            files={"file": open(file_path, "rb")}
+                        )
+                        upload_file_response.raise_for_status()
+
+                        temp_path = upload_file_response.json()["temp_file_path"]
+
+                        knowledge = File(
+                            id=file_id,
+                            path=temp_path,
+                            name=title,
+                            size=os.path.getsize(file_path),
+                            knowledgeId=knowledge_id,
+                            os_mtime=datetime.now().timestamp(),
+                            create_at=datetime.now().timestamp(),
+                            update_at=datetime.now().timestamp()
+                        )
+                        path_list.append(knowledge)
+
+                response = await KleeSettings.async_http_client.post(
+                    url=f"{config.klee_cloud_api_url}/knowledge/{knowledge_id}/import",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json= {
+                        "files": [asdict(file) for file in path_list]
+                    }
+                )
+
+                response.raise_for_status()
 
             return ResponseContent(error_code=0, message="Successfully imported knowledge", data={})
         except Exception as e:
@@ -468,17 +562,18 @@ class KnowledgeService:
     @db_transaction
     async def delete_file(
             self,
+            token,
             file_id: str,
             session=None
     ):
         try:
-            stmt = select(File).where(File.id == file_id)
-            result = await session.execute(stmt)
-            file_info = result.scalars().one_or_none()
-            if file_info is None:
-                return ResponseContent(error_code=-1, message="File not found", data={})
-
             if KleeSettings.local_mode is True:
+                stmt = select(File).where(File.id == file_id)
+                result = await session.execute(stmt)
+                file_info = result.scalars().one_or_none()
+                if file_info is None:
+                    return ResponseContent(error_code=-1, message="File not found", data={})
+
                 await session.delete(file_info)
 
                 file_id = file_info.id
@@ -490,8 +585,12 @@ class KnowledgeService:
                 if os.path.exists(temp_url):
                     shutil.rmtree(temp_url)
             else:
-                await session.delete(file_info)
-                await self.llama_cloud_file_service.delete_file(file_id=file_id)
+                headers = {"Authorization": f"Bearer {token}"}
+                response = await KleeSettings.async_http_client.delete(
+                    headers=headers,
+                    url=f"{config.klee_cloud_api_url}/file/{file_id}"
+                )
+                response.raise_for_status()
 
             return ResponseContent(error_code=0, message="Delete file successfully", data={})
         except Exception as e:
@@ -499,6 +598,7 @@ class KnowledgeService:
 
     async def llama_add(
             self,
+            token,
             knowledge_id: str,
             file_obj: LlamaFileList
     ):
@@ -552,9 +652,23 @@ class KnowledgeService:
                         size=os.path.getsize(file_path),
                         knowledgeId=knowledge_id,
                     )
-                    file = await self.llama_cloud_file_service.upload_file(file_path=file_path, external_file_id=f"{knowledge_id}/{file_name}")
-                    new_file.id = file.id
-                    await self.save_single_file(new_file)
+                    # upload file to cloud
+                    upload_file_response = await KleeSettings.async_http_client.post(
+                        headers={"Authorization": f"Bearer {token}"},
+                        url=f"{config.klee_cloud_api_url}/file/upload-temp",
+                        files={"file": open(file_path, "rb")}
+                    )
+                    upload_file_response.raise_for_status()
+
+                    new_file.path = upload_file_response.json()["temp_file_path"]
+
+                    headers = {"Authorization": f"Bearer {token}"}
+                    response = await KleeSettings.async_http_client.post(
+                        headers=headers,
+                        url=f"{config.klee_cloud_api_url}/file/upload",
+                        json=asdict(new_file)
+                    )
+                    response.raise_for_status()
 
             return ResponseContent(error_code=0, message="Upload file successfully", data={})
         except Exception as e:

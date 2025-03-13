@@ -141,7 +141,7 @@ def setup_llama_cloud(api_key: Optional[str]):
     """
     if api_key:
         KleeSettings.async_llama_cloud = AsyncLlamaCloud(token=api_key)
-    KleeSettings.local_mode = True
+    # KleeSettings.local_mode = True
 
 def main():
     configure_logging()

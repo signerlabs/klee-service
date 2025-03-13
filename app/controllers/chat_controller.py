@@ -42,29 +42,33 @@ class ChatController:
 
     async def create_conversation(
             self,
+            token,
             llama_request: LlamaConversationRequest
     ):
         """
         Create a new conversation
         Args:
+            token: User token
             llama_request: Conversation creation request data
         Returns:
             Response containing created conversation data
         """
-        return await self.chat_service.create_conversation(llama_request=llama_request)
+        return await self.chat_service.create_conversation(token=token, llama_request=llama_request)
 
     async def delete_conversation(
             self,
+            token,
             conversation_id: str
     ):
         """
         Delete a conversation
         Args:
             conversation_id: ID of the conversation to delete
+            token: User token
         Returns:
             Response indicating success/failure
         """
-        return await self.chat_service.delete_conversation(conversation_id=conversation_id)
+        return await self.chat_service.delete_conversation(token=token, conversation_id=conversation_id)
 
     async def delete_message(
             self,
@@ -96,15 +100,17 @@ class ChatController:
 
     async def llama_get_conversation_message(
             self,
+            token,
             conversation_id: str = None
     ):
-        return await self.chat_service.llama_get_conversation_message(conversation_id=conversation_id)
+        return await self.chat_service.llama_get_conversation_message(token=token, conversation_id=conversation_id)
 
     async def get_conversation_detail(
             self,
+            token,
             conversation_id: str
     ):
-        return await self.chat_service.get_conversation_detail(conversation_id=conversation_id)
+        return await self.chat_service.get_conversation_detail(token=token, conversation_id=conversation_id)
 
     async def get_conversation_messages(
             self,
@@ -114,9 +120,10 @@ class ChatController:
 
     async def get_all_chat_conversations(
             self,
-            keyword: str = None
+            token,
+            keyword: str = None,
     ):
-        return await self.chat_service.get_all_chat_conversations(keyword=keyword)
+        return await self.chat_service.get_all_chat_conversations(token=token, keyword=keyword)
 
     async def rot_chat(
             self,
@@ -153,17 +160,29 @@ async def create_conversation_title(
 @router.post("/conversation")
 async def create_conversation(
         llama_request: LlamaConversationRequest,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
-    return await conversation_controller.create_conversation(llama_request=llama_request)
+    """
+    Create a new conversation
+    Args:
+        llama_request:
+        Authorization:
+        conversation_controller:
+
+    Returns:
+
+    """
+    return await conversation_controller.create_conversation(token=Authorization, llama_request=llama_request)
 
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
         conversation_id: str,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
-    return await conversation_controller.delete_conversation(conversation_id=conversation_id)
+    return await conversation_controller.delete_conversation(token=Authorization, conversation_id=conversation_id)
 
 
 @router.delete("/message/{message_id}")
@@ -186,26 +205,29 @@ async def update_conversation(
 @router.get("/conversations/{conversation_id}")
 async def llama_get_conversation_message(
         conversation_id: str = None,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
-    return await conversation_controller.llama_get_conversation_message(conversation_id=conversation_id)
+    return await conversation_controller.llama_get_conversation_message(token=Authorization, conversation_id=conversation_id)
 
 
 @router.get('/conversations')
 async def get_all_chat_conversations(
         keyword: str = None,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
-    return await conversation_controller.get_all_chat_conversations(keyword=keyword)
+    return await conversation_controller.get_all_chat_conversations(token=Authorization, keyword=keyword)
 
 
 # 获取指定的Conversation的详情
 @router.get('/conversations/{conversation_id}')
 async def get_conversation_detail(
         conversation_id: str,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
-    return await conversation_controller.get_conversation_detail(conversation_id=conversation_id)
+    return await conversation_controller.get_conversation_detail(token=Authorization, conversation_id=conversation_id)
 
 
 # 获取指定Conversation的聊天记录
@@ -235,3 +257,11 @@ async def rot_chat(
     return await conversation_controller.rot_chat(chat_request=chat_request, Authorization=Authorization, request=request)
 
 
+@router.post("/cloud")
+async def cloud_chat(
+        chat_request: LLamaChatRequest,
+        Authorization: str = Header(None),
+        conversation_controller: ChatController = Depends(ChatController)
+):
+    logger.info(f"Authorization: {Authorization}")
+    return await conversation_controller.chat_service.cloud_chat(chat_request=chat_request, token=Authorization)

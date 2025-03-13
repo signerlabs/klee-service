@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from sqlalchemy import Column, String, Boolean, Enum
 from sqlalchemy.types import Double
 from sqlalchemy.ext.declarative import declarative_base
@@ -19,7 +21,7 @@ class NoteStatus(PyEnum):
     deleted = "deleted"
     draft = "draft"
 
-
+@dataclass
 class Note(Base):
     __tablename__ = 'note'
 
@@ -32,9 +34,9 @@ class Note(Base):
     is_pin = Column(Boolean)
     create_at = Column(Double)
     update_at = Column(Double)
-    delete_at = Column(Double, default=0)
-    html_content = Column(String, default="")
-    local_mode = Column(Boolean, default=False, nullable=True)
+    delete_at: float = Column(Double, default=0)
+    html_content: str = Column(String, default="")
+    local_mode: bool = Column(Boolean, default=False, nullable=True)
 
     def __init__(self, id, folder_id, title, content, type, status, is_pin, create_at, update_at, delete_at=0,
                  html_content="", local_mode=True):
@@ -54,15 +56,15 @@ class Note(Base):
     def __repr__(self):
         return f"<Note(id='{self.id}', title='{self.title}')>"
 
-
+@dataclass
 class CreateNoteRequest(BaseModel):
-    id: str
-    folder_id: str
-    title: str
-    content: str
-    type: NoteType
-    status: NoteStatus
-    is_pin: bool
+    id: str = ""
+    folder_id: str = ""
+    title: str = ""
+    content: str = ""
+    type: str = ""
+    status: str = ""
+    is_pin: bool = False
     html_content: str = ""
     temp_file_url: str = ""
 
@@ -71,14 +73,14 @@ class NoteFileListId(BaseModel):
     temp_file_urls: list[str]
     vector_file_urls: list[str]
 
-
+@dataclass
 class NoteResponse(BaseModel):
     id: str
     folder_id: str
     title: str
     content: str
-    type: NoteType
-    status: NoteStatus
+    type: str
+    status: str
     is_pin: bool
     create_at: float
     update_at: float

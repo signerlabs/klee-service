@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+import httpx
 from llama_cloud.client import AsyncLlamaCloud
 from llama_index.core.agent import AgentRunner
 
@@ -34,6 +35,26 @@ class _Settings:
     _provider_id: Optional[str] = None
     _agent_runner: Optional[AgentRunner] = None
     _async_llama_cloud: Optional[AsyncLlamaCloud] = None
+    _llama_cloud_url: Optional[str] = None
+    _async_http_client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def async_http_client(self):
+        if self._async_http_client is None:
+            self._async_http_client = httpx.AsyncClient(timeout=300)
+        return self._async_http_client
+
+    @async_http_client.setter
+    def async_http_client(self, value):
+        self._async_http_client = value
+
+    @property
+    def llama_cloud_url(self):
+        return self._llama_cloud_url
+
+    @llama_cloud_url.setter
+    def llama_cloud_url(self, value):
+        self._llama_cloud_url = value
 
     @property
     def async_llama_cloud(self):

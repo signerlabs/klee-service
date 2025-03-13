@@ -54,13 +54,13 @@ class Knowledge(Base):
     icon: str = Column(String, default="", nullable=False)
     description: str = Column(String, default="", nullable=False)
 
-    category: KnowledgeCat = Column(
-        SQLAlchemyEnum(KnowledgeCat), default=KnowledgeCat.FILE, nullable=False
+    category: str = Column(
+        String(36), default="FOLDER", nullable=False
     )
     isPin: bool = Column(Boolean, default=False, nullable=False)  # is pinned to top
     folder_path: str = Column(String, default="", nullable=False)
     embed_status: str = Column(
-        SQLAlchemyEnum(EmbedStatus), default=EmbedStatus.EMBEDDING, nullable=False
+        String(36), default="EMBEDDED", nullable=False
     )  # embedding|embedded
     parent_id: str = Column(String, default="", nullable=True)
     local_mode: bool = Column(Boolean, default="", nullable=True)
@@ -108,11 +108,12 @@ def abs_file_id(knowledge_id: str, path: str) -> str:
     s = f"{knowledge_id}{path}"
     return hashlib.md5(s.encode('utf-8')).hexdigest()
 
+@dataclass
 class KnowledgeCreate(BaseModel):
     title: str
     icon: str = ""
     description: str = ""
-    category: KnowledgeCat = KnowledgeCat.FILE
+    category: str = "FOLDER"
     isPin: bool = False
     folder_path: str = ""
 
@@ -128,10 +129,10 @@ class KnowledgeResponse(BaseModel):
     title: str
     icon: str
     description: str
-    category: KnowledgeCat
+    category: str
     isPin: bool
     folder_path: str
-    embed_status: EmbedStatus
+    embed_status: str
     create_at: float
     update_at: float
 

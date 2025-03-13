@@ -337,7 +337,7 @@ class LlamaIndexService:
                     os.environ["http_proxy"] = "http://localhost:11434"
                     llamaSettings.llm = Ollama(
                         model=model_name,
-                        request_timeout=60.0,
+                        request_timeout=300.0,
                         base_url="http://localhost:11434"
                     )
                     KleeSettings.un_load = False

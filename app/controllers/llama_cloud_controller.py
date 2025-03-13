@@ -3,6 +3,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from starlette.requests import Request
 
 from app.services.llama_cloud.llama_cloud_chat_app_service import LlamaCloudChatAppService
 from app.services.llama_cloud.llama_cloud_chat_service import ChatCloudService
@@ -411,3 +412,84 @@ async def list_data_sources(
         The response from LlamaCloud.
     """
     return await service.list_data_sinks()
+
+@router.get("/llama_cloud/get_rpc_chat_apps")
+async def get_rpc_chat_apps(
+        service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+):
+    """ Endpoint to get all rpc chat apps in LlamaCloud.
+    Args:
+            service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+    Returns:
+        The response from LlamaCloud.
+    """
+    return await service.rpc_get_chat_apps()
+
+@router.post("/llama_cloud/create_rpc_chat_app")
+async def create_rpc_chat_app(
+        request: LlamaCloudChatAppRequest,
+        service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+):
+    """ Endpoint to create a rpc chat app in LlamaCloud.
+    Args:
+            request: The request body containing the retriever id and chat app name.
+            service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+    Returns:
+        The response from LlamaCloud.
+    """
+    return await service.rpc_create_chat_app(
+        name=request.name,
+        retriever_id=request.retriever_id
+    )
+
+@router.post("/llama_cloud/chat_with_app/{app_id}")
+async def chat_with_app(
+        app_id: str,
+        request: Request,
+        service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+):
+    """ Endpoint to chat with a chat app in LlamaCloud.
+    Args:
+            app_id: The id of the chat app.
+            request: The request body containing the message and knowledge base ids.
+            service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+    Returns:
+        The response from LlamaCloud.
+    """
+    return await service.rpc_chat_with_chat_app(
+        chat_app_id=app_id,
+        messages=[]
+    )
+
+@router.post("/llama_cloud/client/chat_with_app/{app_id}")
+async def client_chat_with_app(
+        app_id: str,
+        service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+):
+    """ Endpoint to chat with a chat app in LlamaCloud.
+    Args:
+            app_id: The id of the chat app.
+            service: LlamaCloudChatAppService = Depends(LlamaCloudChatAppService)
+    Returns:
+        The response from LlamaCloud.
+    """
+    return await service.chat_with_chat_app(
+        chat_app_id=app_id,
+        messages=[]
+    )
+
+@router.get("/llama_cloud/add_file_to_pipeline/{pipeline_id}")
+async def add_file_to_pipeline(
+        pipeline_id: str,
+        service: LlamaCloudPipelinesService = Depends(LlamaCloudPipelinesService)
+):
+    """ Endpoint to add a file to a pipeline in LlamaCloud.
+    Args:
+            pipeline_id: The id of the pipeline.
+            service: LlamaCloudPipelinesService = Depends(LlamaCloudPipelinesService)
+    Returns:
+        The response from LlamaCloud.
+    """
+    return await service.add_files_to_pipeline(
+        pipeline_id=pipeline_id,
+    )

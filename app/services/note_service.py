@@ -1,12 +1,16 @@
+import json
 import logging
 import os
 import time
 import uuid
+from dataclasses import asdict
 from typing import List, Optional
 
+import httpx
 from sqlalchemy import select, or_, false, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.env_config import config
 from app.model.Response import ResponseContent
 from app.model.note import CreateNoteRequest, Note, NoteResponse
 from app.services.client_sqlite_service import db_transaction
@@ -48,13 +52,13 @@ class NoteService:
         """
         note_dir = os.path.join(self.save_dir, note_id)
         os.makedirs(note_dir, exist_ok=True)
-        
+
         filename = "store.txt" if is_store else f"{note_id}.txt"
         file_path = os.path.join(note_dir, filename)
-        
+
         with open(file_path, "w", encoding="utf-8") as file:
             file.write(content)
-        
+
         return file_path
 
     async def _process_local_note(self, note_id: str, content: str) -> None:
@@ -76,12 +80,14 @@ class NoteService:
     @db_transaction
     async def create_note(
             self,
+            token,
             request: CreateNoteRequest,
             session: AsyncSession
-    ) -> NoteResponse:
+    ):
         """Create a new note
 
         Args:
+            token: The user token
             request: The note creation request
             session: The database session
 
@@ -92,34 +98,43 @@ class NoteService:
             NoteServiceException: If there's an error creating the note
         """
         try:
-            current_time = time.time()
-            note_id = str(uuid.uuid4())
-            local_mode = KleeSettings.local_mode
+            if KleeSettings.local_mode is True:
+                current_time = time.time()
+                note_id = str(uuid.uuid4())
+                local_mode = KleeSettings.local_mode
 
-            if local_mode:
-                await self._process_local_note(note_id, request.content)
+                if local_mode:
+                    await self._process_local_note(note_id, request.content)
+
+                new_note = Note(
+                    id=note_id,
+                    folder_id=request.folder_id,
+                    title=request.title,
+                    content=request.content,
+                    type="note",
+                    status="normal",
+                    is_pin=request.is_pin,
+                    create_at=current_time,
+                    update_at=current_time,
+                    delete_at=0,
+                    html_content=request.html_content,
+                    local_mode=local_mode
+                )
+
+                session.add(new_note)
+                await session.flush()
+
+                note_dict = {k: v for k, v in new_note.__dict__.items() if k != '_sa_instance_state'}
+                return note_dict
             else:
-                note_id = await self._process_cloud_note(note_id, request.content)
-
-            new_note = Note(
-                id=note_id,
-                folder_id=request.folder_id,
-                title=request.title,
-                content=request.content,
-                type=request.type.note,
-                status=request.status.normal,
-                is_pin=request.is_pin,
-                create_at=current_time,
-                update_at=current_time,
-                delete_at=0,
-                html_content=request.html_content,
-                local_mode=local_mode
-            )
-
-            session.add(new_note)
-            await session.flush()
-
-            return NoteResponse(**new_note.__dict__)
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{config.klee_cloud_api_url}/note/create",
+                        headers={"Authorization": f"Bearer {token}"}, json=asdict(request)
+                    )
+                    response.raise_for_status()
+                    logger.info(f"Create note response: {response.json()}")
+                    return response.json()
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
             raise NoteServiceException(f"Failed to create note: {str(e)}") from e
@@ -127,15 +142,16 @@ class NoteService:
     @db_transaction
     async def get_all_notes(
             self,
+            token: str,
             keyword: Optional[str] = None,
             session: AsyncSession = None
-    ) -> List[NoteResponse]:
+    ):
         """Get all notes, optionally filtered by keyword
 
         Args:
             keyword: Optional search keyword to filter notes
             session: The database session
-
+            token: The user token
         Returns:
             List of NoteResponse objects
 
@@ -143,22 +159,38 @@ class NoteService:
             NoteServiceException: If there's an error retrieving notes
         """
         try:
-            query = select(Note)
-            if keyword:
-                query = query.filter(
-                    or_(
-                        Note.content.ilike(f"%{keyword}%"),
-                        Note.title.ilike(f"%{keyword}%")
+            if KleeSettings.local_mode is True:
+                query = select(Note)
+                if keyword:
+                    query = query.filter(
+                        or_(
+                            Note.content.ilike(f"%{keyword}%"),
+                            Note.title.ilike(f"%{keyword}%")
+                        )
                     )
-                )
-            
-            query = query.filter(
-                Note.local_mode == (true() if KleeSettings.local_mode else false())
-            )
 
-            result = await session.execute(query)
-            notes = result.scalars().all()
-            return [NoteResponse(**note.__dict__) for note in notes]
+                query = query.filter(
+                    Note.local_mode == (true() if KleeSettings.local_mode else false())
+                )
+
+                result = await session.execute(query)
+                notes = result.scalars().all()
+
+                return_list = []
+
+                for note in notes:
+                    note_dict = {k: v for k, v in note.__dict__.items() if k != '_sa_instance_state'}
+                    return_list.append(note_dict)
+
+                return return_list
+            else:
+                response = await KleeSettings.async_http_client.get(
+                    f"{config.klee_cloud_api_url}/note/all",
+                    headers={"Authorization": f"Bearer {token}"}, params={"keyword": keyword}
+                )
+                response.raise_for_status()
+                logger.info(f"Get all notes response: {response.json()}")
+                return response.json()
         except Exception as e:
             logger.error(f"Error retrieving notes: {str(e)}")
             raise NoteServiceException(f"Failed to retrieve notes: {str(e)}") from e
@@ -166,17 +198,18 @@ class NoteService:
     @db_transaction
     async def update_note(
             self,
+            token,
             note_id: str,
             request: CreateNoteRequest,
             session: AsyncSession
-    ) -> NoteResponse:
+    ):
         """Update an existing note
 
         Args:
             note_id: The ID of the note to update
             request: The note update request
             session: The database session
-
+            token: The user token
         Returns:
             NoteResponse object containing the updated note data
 
@@ -185,25 +218,36 @@ class NoteService:
             NoteServiceException: If there's an error updating the note
         """
         try:
-            result = await session.execute(select(Note).filter(Note.id == note_id))
-            note = result.scalar_one_or_none()
-            if note is None:
-                raise NoteNotFoundException(f"Note with ID {note_id} not found")
+            if KleeSettings.local_mode is True:
+                result = await session.execute(select(Note).filter(Note.id == note_id))
+                note = result.scalar_one_or_none()
+                if note is None:
+                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
 
-            note.folder_id = request.folder_id
-            note.title = request.title
-            note.content = request.content
-            note.type = request.type
-            note.status = request.status
-            note.is_pin = request.is_pin
-            note.update_at = time.time()
-            note.html_content = request.html_content
+                note.folder_id = request.folder_id
+                note.title = request.title
+                note.content = request.content
+                note.type = request.type
+                note.status = request.status
+                note.is_pin = request.is_pin
+                note.update_at = time.time()
+                note.html_content = request.html_content
 
-            if KleeSettings.local_mode:
-                await self._process_local_note(note_id, request.html_content)
+                if KleeSettings.local_mode:
+                    await self._process_local_note(note_id, request.html_content)
 
-            await session.flush()
-            return NoteResponse(**note.__dict__)
+                await session.flush()
+                note_dict = {k: v for k, v in note.__dict__.items() if k != '_sa_instance_state'}
+                return note_dict
+            else:
+                response = await KleeSettings.async_http_client.put(
+                    f"{config.klee_cloud_api_url}/note/{note_id}",
+                    headers={"Authorization": f"Bearer {token}"}, json=asdict(request)
+                )
+                if response.status_code == 404:
+                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
+                response.raise_for_status()
+                return response.json()
         except NoteNotFoundException:
             raise
         except Exception as e:
@@ -213,6 +257,7 @@ class NoteService:
     @db_transaction
     async def delete_note(
             self,
+            token,
             note_id: str,
             session: AsyncSession
     ) -> ResponseContent:
@@ -221,7 +266,7 @@ class NoteService:
         Args:
             note_id: The ID of the note to delete
             session: The database session
-
+            token: The user token
         Returns:
             ResponseContent indicating success
 
@@ -230,22 +275,33 @@ class NoteService:
             NoteServiceException: If there's an error deleting the note
         """
         try:
-            result = await session.execute(select(Note).filter(Note.id == note_id))
-            note = result.scalar_one_or_none()
-            
-            if note is None:
-                raise NoteNotFoundException(f"Note with ID {note_id} not found")
+            if KleeSettings.local_mode is True:
+                result = await session.execute(select(Note).filter(Note.id == note_id))
+                note = result.scalar_one_or_none()
 
-            await session.delete(note)
+                if note is None:
+                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
 
-            if not KleeSettings.local_mode:
-                await self.llama_cloud_file_service.delete_file(note_id)
+                await session.delete(note)
 
-            return ResponseContent(
-                error_code=0,
-                message="Note deleted successfully",
-                data=None
-            )
+                return ResponseContent(
+                    error_code=0,
+                    message="Note deleted successfully",
+                    data=None
+                )
+            else:
+                response = await KleeSettings.async_http_client.delete(
+                    f"{config.klee_cloud_api_url}/note/{note_id}",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+                if response.status_code == 404:
+                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
+                response.raise_for_status()
+                return ResponseContent(
+                    error_code=0,
+                    message="Note deleted successfully",
+                    data=None
+                )
         except NoteNotFoundException:
             raise
         except Exception as e:
@@ -255,12 +311,14 @@ class NoteService:
     @db_transaction
     async def get_note_by_id(
             self,
+            token,
             note_id: str,
             session: AsyncSession
-    ) -> NoteResponse:
+    ):
         """Get a note by id
 
         Args:
+            token: The user token
             note_id: The ID of the note to retrieve
             session: The database session
 
@@ -271,12 +329,57 @@ class NoteService:
             NoteNotFoundException: If the note is not found
         """
         try:
-            result = await session.execute(select(Note).filter(Note.id == note_id))
-            note = result.scalar_one_or_none()
-            if note is None:
-                logger.error(f"Note not found with ID: {note_id}")
-                raise NoteNotFoundException(f"Note with ID {note_id} not found")
-            return NoteResponse(**note.__dict__)
+            if KleeSettings.local_mode is True:
+                result = await session.execute(select(Note).filter(Note.id == note_id))
+                note = result.scalar_one_or_none()
+                if note is None:
+                    logger.error(f"Note not found with ID: {note_id}")
+                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
+                note_dict = {k: v for k, v in note.__dict__.items() if k != '_sa_instance_state'}
+                return note_dict
+            else:
+                response = await KleeSettings.async_http_client.get(
+                    f"{config.klee_cloud_api_url}/note/{note_id}",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+                if response.status_code == 404:
+                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
+                response.raise_for_status()
+                return response.json()
         except Exception as e:
             logger.error(f"Error retrieving note {note_id}: {str(e)}")
             raise
+
+    async def sync_files(
+            self,
+            token,
+            note_id: str,
+    ):
+        """
+        Synchronize files for a note
+        Args:
+            note_id: The ID of the note to synchronize files for
+
+        Returns:
+
+        """
+        try:
+            if KleeSettings.local_mode is False:
+                upload_file_response = await KleeSettings.async_http_client.post(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/file/upload-temp",
+                    files={"file": open(f"{KleeSettings.temp_file_url}{note_id}/store.txt", "rb")}
+                )
+                upload_file_response.raise_for_status()
+
+                temp_path = upload_file_response.json()["temp_file_path"]
+                filename = upload_file_response.json()["filename"]
+
+                await KleeSettings.async_http_client.get(
+                    f"{config.klee_cloud_api_url}/note/generate-presigned-url/{note_id}",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+                ...
+        except Exception as e:
+            logger.error(f"Error synchronizing files for note {note_id}: {str(e)}")
+            raise NoteServiceException(f"Failed to synchronize files: {str(e)}") from e
