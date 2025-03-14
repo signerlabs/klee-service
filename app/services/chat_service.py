@@ -678,12 +678,12 @@ class ChatService:
 
                 question = chat_request.question
                 language = ""
-                if a_conversation.language_id == "zh":
-                    language = f".Please answer in Chinese."
-                elif a_conversation.language_id == "en":
-                    language = f".Please reply in English."
-                elif a_conversation.language_id == "auto":
-                    language = ""
+                # if a_conversation.language_id == "zh":
+                #     language = f".Please answer in Chinese."
+                # elif a_conversation.language_id == "en":
+                #     language = f".Please reply in English."
+                # elif a_conversation.language_id == "auto":
+                #     language = ""
 
                 file_infos = {}
                 knowledge_list = []
