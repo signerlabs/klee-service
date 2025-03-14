@@ -117,9 +117,10 @@ class ChatController:
 
     async def get_conversation_messages(
             self,
+            token,
             conversation_id: str
     ):
-        return await self.chat_service.get_conversation_messages(conversation_id=conversation_id)
+        return await self.chat_service.get_conversation_messages(conversation_id=conversation_id, token=token)
 
     async def get_all_chat_conversations(
             self,
@@ -239,17 +240,19 @@ async def get_conversation_detail(
 @router.get('/conversations/{conversation_id}/messages')
 async def get_conversation_messages(
         conversation_id: str,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
     """
     Retrieve all messages for a specific conversation
     Args:
         conversation_id: ID of the conversation
+        Authorization: Authorization header
         conversation_controller: ChatController instance
     Returns:
         Response containing conversation messages
     """
-    return await conversation_controller.get_conversation_messages(conversation_id=conversation_id)
+    return await conversation_controller.get_conversation_messages(conversation_id=conversation_id, token=Authorization)
 
 
 @router.post("/rot/chat")

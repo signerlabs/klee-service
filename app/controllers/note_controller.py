@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 
 from app.model.note import CreateNoteRequest, NoteResponse
 from app.model.Response import ResponseContent
-from app.services.note_service import NoteService, NoteServiceException, NoteNotFoundException
+from app.services.note_service import NoteService, NoteServiceException, NoteNotFoundException, UnauthorizedException
 
 router = APIRouter()
 
@@ -24,6 +24,12 @@ class NoteController:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e)
+            )
+        elif isinstance(e, UnauthorizedException):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"}
             )
         elif isinstance(e, NoteServiceException):
             return ResponseContent(error_code=-1, message=str(e), data=None)

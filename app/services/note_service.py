@@ -34,12 +34,40 @@ class NoteNotFoundException(NoteServiceException):
     pass
 
 
+class UnauthorizedException(NoteServiceException):
+    """Raised when authentication fails with 401 status code"""
+    pass
+
+
 class NoteService:
     def __init__(self):
+        logger.info("NoteService initialized")
         self.save_dir = KleeSettings.temp_file_url
         self.vector_dir = KleeSettings.vector_url
         self.llama_index_service = LlamaIndexService()
         self.llama_cloud_file_service = LlamaCloudFileService()
+
+    async def _handle_response(self, response, not_found_message=None):
+        """
+        Handle HTTP response and check for common error status codes
+        
+        Args:
+            response: The HTTP response object
+            not_found_message: Custom message for 404 errors
+            
+        Raises:
+            UnauthorizedException: If status code is 401
+            NoteNotFoundException: If status code is 404
+        """
+        if response.status_code == 401:
+            logger.error(f"Unauthorized access: {response.url}")
+            raise UnauthorizedException("Unauthorized access: Invalid or expired token")
+        
+        if response.status_code == 404 and not_found_message:
+            raise NoteNotFoundException(not_found_message)
+            
+        response.raise_for_status()
+        return response.json()
 
     async def _save_local_file(self, note_id: str, content: str, is_store: bool = True) -> str:
         """Save content to local file system
@@ -210,37 +238,33 @@ class NoteService:
         """Update an existing note
 
         Args:
-            note_id: The ID of the note to update
-            request: The note update request
-            session: The database session
             token: The user token
+            note_id: The ID of the note to update
+            request: The update request containing new note data
+            session: The database session
+
         Returns:
-            NoteResponse object containing the updated note data
+            Updated note data
 
         Raises:
             NoteNotFoundException: If the note is not found
+            UnauthorizedException: If authentication fails (401)
             NoteServiceException: If there's an error updating the note
         """
         try:
             if KleeSettings.local_mode is True:
                 result = await session.execute(select(Note).filter(Note.id == note_id))
                 note = result.scalar_one_or_none()
+
                 if note is None:
                     raise NoteNotFoundException(f"Note with ID {note_id} not found")
 
-                note.folder_id = request.folder_id
                 note.title = request.title
                 note.content = request.content
-                note.type = request.type
-                note.status = request.status
-                note.is_pin = request.is_pin
-                note.update_at = time.time()
-                note.html_content = request.html_content
+                note.update_at = datetime.now().timestamp()
 
-                if KleeSettings.local_mode:
-                    await self._process_local_note(note_id, request.html_content)
-
-                await session.flush()
+                await session.commit()
+                await self._process_local_note(note_id, request.content)
                 note_dict = {k: v for k, v in note.__dict__.items() if k != '_sa_instance_state'}
                 return note_dict
             else:
@@ -248,12 +272,13 @@ class NoteService:
                     f"{config.klee_cloud_api_url}/note/{note_id}",
                     headers={"Authorization": f"Bearer {token}"}, json=asdict(request)
                 )
-                if response.status_code == 404:
-                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
-                response.raise_for_status()
-                await self._process_local_note(response.json()["id"], request.content)
-                return response.json()
-        except NoteNotFoundException:
+                result = await self._handle_response(
+                    response, 
+                    not_found_message=f"Note with ID {note_id} not found"
+                )
+                await self._process_local_note(result["id"], request.content)
+                return result
+        except (NoteNotFoundException, UnauthorizedException):
             raise
         except Exception as e:
             logger.error(f"Error updating note {note_id}: {str(e)}")
@@ -332,6 +357,7 @@ class NoteService:
 
         Raises:
             NoteNotFoundException: If the note is not found
+            UnauthorizedException: If authentication fails (401)
         """
         try:
             if KleeSettings.local_mode is True:
@@ -347,10 +373,12 @@ class NoteService:
                     f"{config.klee_cloud_api_url}/note/{note_id}",
                     headers={"Authorization": f"Bearer {token}"}
                 )
-                if response.status_code == 404:
-                    raise NoteNotFoundException(f"Note with ID {note_id} not found")
-                response.raise_for_status()
-                return response.json()
+                return await self._handle_response(
+                    response, 
+                    not_found_message=f"Note with ID {note_id} not found"
+                )
+        except (UnauthorizedException, NoteNotFoundException):
+            raise
         except Exception as e:
             logger.error(f"Error retrieving note {note_id}: {str(e)}")
             raise

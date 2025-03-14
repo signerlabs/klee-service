@@ -1,27 +1,45 @@
 import logging
 import shutil
-from typing import Optional
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends
-from fastapi.params import Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header
+from starlette.responses import JSONResponse
 
 from app.model.Response import ResponseContent
 from app.model.knowledge import KnowledgeCreate, KnowledgeResponse
 from app.services.llama_index_service import LlamaIndexService
 from app.model.LlamaRequest import LlamaFileList, LLamaFileImportRequest
 
-from app.services.knowledge_service import KnowledgeService
+from app.services.knowledge_service import KnowledgeService, KnowledgeNotFoundException, UnauthorizedException
 
 router = APIRouter()
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 llama_index_service = LlamaIndexService()
 
 class KnowledgeController:
-    def __init__(self):
-        logger.info("init KnowledgeController")
-        self.knowledge_service = KnowledgeService()
+    def __init__(self, knowledge_service: KnowledgeService = Depends(KnowledgeService)):
+        logger.info("KnowledgeController initialized")
+        self.knowledge_service = knowledge_service
+
+    async def handle_knowledge_exception(self, e: Exception) -> ResponseContent:
+        """Unified knowledge exception handler"""
+        if isinstance(e, KnowledgeNotFoundException):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e)
+            )
+        elif isinstance(e, UnauthorizedException):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        else:
+            logger.error(f"Unexpected error: {str(e)}")
+            return ResponseContent(error_code=-1, message="Internal Server Error", data=None)
 
 @router.get('/')
 async def get_all_knowledge(

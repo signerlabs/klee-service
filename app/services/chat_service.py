@@ -32,6 +32,7 @@ from app.model.klee_settings import Settings as KleeSettings
 from app.model.chat_message import ChatMessage as Llama_chat_message, Conversation as Llama_conversation, ChatMessage
 from llama_index.core.base.llms.types import ChatMessage as LlmChatMessage, MessageRole
 
+from app.services.note_service import UnauthorizedException
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -576,33 +577,45 @@ class ChatService:
     async def get_conversation_messages(
             self,
             session,
+            token,
             conversation_id: str
     ):
         """
         待定处理
         """
         try:
-            # 查询指定对话的所有消息
-            stmt = select(ChatMessage).where(ChatMessage.conversation_id == conversation_id).order_by(
-                ChatMessage.create_at)
-            result = await session.execute(stmt)
-            messages = result.scalars().all()
+            if KleeSettings.local_mode is True:
+                # 查询指定对话的所有消息
+                stmt = select(ChatMessage).where(ChatMessage.conversation_id == conversation_id).order_by(
+                    ChatMessage.create_at)
+                result = await session.execute(stmt)
+                messages = result.scalars().all()
 
-            # 将查询结果转换为字典列表
-            messages_list = [
-                {
-                    "id": msg.id,
-                    "conversationId": msg.conversation_id,
-                    "question": msg.question,
-                    "answer": msg.answer,
-                    "status": msg.status,
-                    "createAt": msg.create_at,
-                    "updateAt": msg.update_at
-                }
-                for msg in messages
-            ]
+                # 将查询结果转换为字典列表
+                messages_list = [
+                    {
+                        "id": msg.id,
+                        "conversationId": msg.conversation_id,
+                        "question": msg.question,
+                        "answer": msg.answer,
+                        "status": msg.status,
+                        "createAt": msg.create_at,
+                        "updateAt": msg.update_at
+                    }
+                    for msg in messages
+                ]
 
-            return ResponseContent(error_code=0, message="Get all conversation messages successfully", data=messages_list)
+                return ResponseContent(error_code=0, message="Get all conversation messages successfully", data=messages_list)
+            else:
+                response = await KleeSettings.async_http_client.get(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/conversation/{conversation_id}"
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Get conversation detail successfully",
+                                       data=response.json())
+        except UnauthorizedException as ue:
+            raise ue
         except Exception as e:
             logger.error(f"Get all conversation messages failed: {str(e)}")
             return ResponseContent(error_code=1, message=f"Get all conversation messages failed: {str(e)}", data=None)

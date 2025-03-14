@@ -6,12 +6,13 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any, Coroutine
+from typing import Optional, Any, Coroutine, List
 
 import httpx
 from sqlalchemy import select, or_, update, delete, true, false
 from starlette import status
 from starlette.exceptions import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.LlamaEnum import SystemTypeDiff
 from app.model.Response import ResponseContent
@@ -27,10 +28,48 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
+class KnowledgeServiceException(Exception):
+    """Base exception for KnowledgeService"""
+    pass
+
+
+class KnowledgeNotFoundException(KnowledgeServiceException):
+    """Raised when a knowledge entry is not found"""
+    pass
+
+
+class UnauthorizedException(KnowledgeServiceException):
+    """Raised when authentication fails with 401 status code"""
+    pass
+
+
 class KnowledgeService:
     def __init__(self):
         self.time_out = 300
         self.llama_index_service = LlamaIndexService()
+        logger.info("KnowledgeService initialized")
+
+    async def _handle_response(self, response, not_found_message=None):
+        """
+        Handle HTTP response and check for common error status codes
+        
+        Args:
+            response: The HTTP response object
+            not_found_message: Custom message for 404 errors
+            
+        Raises:
+            UnauthorizedException: If status code is 401
+            KnowledgeNotFoundException: If status code is 404
+        """
+        if response.status_code == 401:
+            logger.error(f"Unauthorized access: {response.url}")
+            raise UnauthorizedException("Unauthorized access: Invalid or expired token")
+        
+        if response.status_code == 404 and not_found_message:
+            raise KnowledgeNotFoundException(not_found_message)
+            
+        response.raise_for_status()
+        return response.json()
 
     @db_transaction
     async def get_all_knowledge(
@@ -97,6 +136,10 @@ class KnowledgeService:
             session: Database session
         Returns:
             ResponseContent: Response containing knowledge data
+            
+        Raises:
+            KnowledgeNotFoundException: If the knowledge entry is not found
+            UnauthorizedException: If authentication fails (401)
         """
         try:
             if KleeSettings.local_mode is True:
@@ -105,7 +148,7 @@ class KnowledgeService:
                 knowledge = result.scalars().first()
 
                 if not knowledge:
-                    raise HTTPException(status_code=404, detail="Knowledge entry not found")
+                    raise KnowledgeNotFoundException("Knowledge entry not found")
 
                 knowledge_dict = asdict(knowledge)
 
@@ -116,9 +159,19 @@ class KnowledgeService:
                     url=f"{config.klee_cloud_api_url}/knowledge/{knowledge_id}",
                     headers=headers,
                 )
-                response.raise_for_status()
-                return ResponseContent(error_code=0, message="Successfully retrieved knowledge entry", data=response.json())
+                result = await self._handle_response(
+                    response, 
+                    not_found_message=f"Knowledge entry with ID {knowledge_id} not found"
+                )
+                return ResponseContent(error_code=0, message="Successfully retrieved knowledge entry", data=result)
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
+            logger.error(f"Failed to retrieve knowledge entry: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to retrieve knowledge entry: {str(e)}")
 
     @db_transaction
