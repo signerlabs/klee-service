@@ -310,102 +310,152 @@ class KnowledgeService:
     @db_transaction
     async def refresh_knowledge(
             self,
+            token,
             knowledge_id: str,
             path: str,
             session=None
     ):
         try:
-            import_files = []
-            dir_path = Path(path)
-            for file in dir_path.rglob('*'):
-                if file.is_file():
-                    file_path = str(file)
-                    if file_path.find("DS_Store") != -1:
-                        continue
-                    title = ""
-                    if KleeSettings.os_type == SystemTypeDiff.WIN.value:
-                        title = file_path.split("\\")[-1]
-                    elif KleeSettings.os_type == SystemTypeDiff.MAC.value:
-                        title = file_path.split("/")[-1]
-                    file_size = os.path.getsize(file_path)
-                    import_files.append({"path": file_path, "name": title, "size": file_size})
+            if KleeSettings.local_mode is True:
+                import_files = []
+                dir_path = Path(path)
+                for file in dir_path.rglob('*'):
+                    if file.is_file():
+                        file_path = str(file)
+                        if file_path.find("DS_Store") != -1:
+                            continue
+                        title = ""
+                        if KleeSettings.os_type == SystemTypeDiff.WIN.value:
+                            title = file_path.split("\\")[-1]
+                        elif KleeSettings.os_type == SystemTypeDiff.MAC.value:
+                            title = file_path.split("/")[-1]
+                        file_size = os.path.getsize(file_path)
+                        import_files.append({"path": file_path, "name": title, "size": file_size})
 
-            stmt = select(File).where(File.knowledgeId == knowledge_id)
-            results = await session.execute(stmt)
-            files = results.scalars().all()
+                stmt = select(File).where(File.knowledgeId == knowledge_id)
+                results = await session.execute(stmt)
+                files = results.scalars().all()
 
-            new_files = []
-            if len(import_files) > 0:
-                for import_file in import_files:
-                    flag = True
+                new_files = []
+                if len(import_files) > 0:
+                    for import_file in import_files:
+                        flag = True
+                        for file in files:
+                            # 判断是否有这个文件
+                            if import_file["path"] == file.path:
+                                flag = False
+                                # 判断文件是否发生变化
+                                if import_file["size"] != file.size:
+                                    file.size = import_file['size']
+                                    # await persist_one_file_to_disk(import_file["path"], file.id)
+                                    if not os.path.exists(f"{KleeSettings.temp_file_url}{file.id}"):
+                                        os.makedirs(f"{KleeSettings.temp_file_url}{file.id}", exist_ok=True)
+                                    await self.write_file(f"{import_file["path"]}",
+                                                          f"{KleeSettings.temp_file_url}{file.id}/{file.name}")
+
+                                    await self.llama_index_service.persist_file_to_disk_2(
+                                        path=f"{KleeSettings.temp_file_url}{file.id}",
+                                        store_dir=f"{KleeSettings.vector_url}{file.id}"
+                                    )
+                                    flag = False
+                                    break
+                        if flag is True:
+                            file_id = str(uuid.uuid4())
+                            now_time = datetime.now().timestamp()
+                            new_file = File()
+                            new_file.__dict__.update({
+                                "id": file_id,
+                                "name": import_file["name"],
+                                "os_mtime": now_time,
+                                "format": import_file["name"].split(".")[-1],
+                                "size": import_file["size"],
+                                "knowledgeId": knowledge_id,
+                                "path": import_file["path"],
+                                "create_at": now_time,
+                                "update_at": now_time
+                            })
+                            if not os.path.exists(f"{KleeSettings.temp_file_url}{file_id}"):
+                                os.makedirs(f"{KleeSettings.temp_file_url}{file_id}", exist_ok=True)
+                            await self.write_file(f"{import_file["path"]}",
+                                                  f"{KleeSettings.temp_file_url}{file_id}/{new_file.name}")
+
+                            await self.llama_index_service.persist_file_to_disk_2(
+                                path=f"{KleeSettings.temp_file_url}{new_file.id}",
+                                store_dir=f"{KleeSettings.vector_url}{new_file.id}"
+                            )
+                            new_files.append(new_file)
+
+                delete_file_id = []
+                if len(import_files) > 0:
                     for file in files:
-                        # 判断是否有这个文件
-                        if import_file["path"] == file.path:
-                            flag = False
-                            # 判断文件是否发生变化
-                            if import_file["size"] != file.size:
-                                file.size = import_file['size']
-                                # await persist_one_file_to_disk(import_file["path"], file.id)
-                                if not os.path.exists(f"{KleeSettings.temp_file_url}{file.id}"):
-                                    os.makedirs(f"{KleeSettings.temp_file_url}{file.id}", exist_ok=True)
-                                await self.write_file(f"{import_file["path"]}",
-                                                      f"{KleeSettings.temp_file_url}{file.id}/{file.name}")
-
-                                await self.llama_index_service.persist_file_to_disk_2(
-                                    path=f"{KleeSettings.temp_file_url}{file.id}",
-                                    store_dir=f"{KleeSettings.vector_url}{file.id}"
-                                )
+                        flag = True
+                        for import_file in import_files:
+                            if file.path == import_file["path"]:
                                 flag = False
                                 break
-                    if flag is True:
+                        if flag is True:
+                            delete_file_id.append(file.id)
+
+                session.add_all(files)
+                session.add_all(new_files)
+
+                delete_stmt = delete(File).where(File.id.in_(delete_file_id))
+
+                for i in delete_file_id:
+                    vector_url = f"{KleeSettings.vector_url}{i}"
+                    shutil.rmtree(vector_url)
+
+                await session.execute(delete_stmt)
+
+                return ResponseContent(error_code=0, message=f"Refresh knowledge successfully", data={})
+            else:
+                path_list = []
+                directory_path = Path(path)
+                for file in directory_path.rglob('*'):
+                    if file.is_file():
+                        file_path = str(file)
+                        title = ""
+                        if KleeSettings.os_type == SystemTypeDiff.WIN.value:
+                            title = file_path.split("\\")[-1]
+                        elif KleeSettings.os_type == SystemTypeDiff.MAC.value:
+                            title = file_path.split("/")[-1]
                         file_id = str(uuid.uuid4())
-                        now_time = datetime.now().timestamp()
-                        new_file = File()
-                        new_file.__dict__.update({
-                            "id": file_id,
-                            "name": import_file["name"],
-                            "os_mtime": now_time,
-                            "format": import_file["name"].split(".")[-1],
-                            "size": import_file["size"],
-                            "knowledgeId": knowledge_id,
-                            "path": import_file["path"],
-                            "create_at": now_time,
-                            "update_at": now_time
-                        })
-                        if not os.path.exists(f"{KleeSettings.temp_file_url}{file_id}"):
-                            os.makedirs(f"{KleeSettings.temp_file_url}{file_id}", exist_ok=True)
-                        await self.write_file(f"{import_file["path"]}",
-                                              f"{KleeSettings.temp_file_url}{file_id}/{new_file.name}")
 
-                        await self.llama_index_service.persist_file_to_disk_2(
-                            path=f"{KleeSettings.temp_file_url}{new_file.id}",
-                            store_dir=f"{KleeSettings.vector_url}{new_file.id}"
+                        # if file_path
+                        if file_path.find("DS_Store") != -1:
+                            continue
+
+                        # upload file to cloud
+                        upload_file_response = await KleeSettings.async_http_client.post(
+                            headers={"Authorization": f"Bearer {token}"},
+                            url=f"{config.klee_cloud_api_url}/file/upload-temp",
+                            files={"file": open(file_path, "rb")}
                         )
-                        new_files.append(new_file)
+                        upload_file_response.raise_for_status()
 
-            delete_file_id = []
-            if len(import_files) > 0:
-                for file in files:
-                    flag = True
-                    for import_file in import_files:
-                        if file.path == import_file["path"]:
-                            flag = False
-                            break
-                    if flag is True:
-                        delete_file_id.append(file.id)
+                        temp_path = upload_file_response.json()["temp_file_path"]
 
-            session.add_all(files)
-            session.add_all(new_files)
+                        knowledge = File(
+                            id=file_id,
+                            path=temp_path,
+                            name=title,
+                            size=os.path.getsize(file_path),
+                            knowledgeId=knowledge_id,
+                            os_mtime=datetime.now().timestamp(),
+                            create_at=datetime.now().timestamp(),
+                            update_at=datetime.now().timestamp()
+                        )
+                        path_list.append(knowledge)
 
-            delete_stmt = delete(File).where(File.id.in_(delete_file_id))
+                response = await KleeSettings.async_http_client.post(
+                    url=f"{config.klee_cloud_api_url}/knowledge/{knowledge_id}/import",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={
+                        "files": [asdict(file) for file in path_list]
+                    }
+                )
 
-            for i in delete_file_id:
-                vector_url = f"{KleeSettings.vector_url}{i}"
-                shutil.rmtree(vector_url)
-
-            await session.execute(delete_stmt)
-
-            return ResponseContent(error_code=0, message=f"Refresh knowledge successfully", data={})
+                response.raise_for_status()
         except Exception as e:
             logger.error(f"Refresh knowledge error: {e}")
             return ResponseContent(error_code=-1, message=f"Refresh knowledge failed, {str(e)}", data={})

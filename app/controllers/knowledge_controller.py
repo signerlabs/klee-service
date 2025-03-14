@@ -115,9 +115,10 @@ async def delete_knowledge(
 async def refresh_knowledge(
         knowledge_id: str,
         path: str,
+        Authorization: str = Header(None),
         controller: KnowledgeController = Depends(KnowledgeController),
 ):
-    return await controller.refresh_knowledge(knowledge_id, path)
+    return await controller.knowledge_service.refresh_knowledge(token=Authorization, knowledge_id=knowledge_id, path=path)
 
 
 @router.post("/import/{knowledge_id}")
