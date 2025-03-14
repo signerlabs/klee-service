@@ -167,6 +167,9 @@ class NoteService:
 
                     await self._process_local_note(response.json()["id"], request.content)
                     return response.json()
+        except (UnauthorizedException, NoteNotFoundException):
+            raise
+
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
             raise NoteServiceException(f"Failed to create note: {str(e)}") from e
@@ -223,6 +226,8 @@ class NoteService:
                 response.raise_for_status()
                 logger.info(f"Get all notes response: {response.json()}")
                 return response.json()
+        except (UnauthorizedException, NoteNotFoundException):
+            raise
         except Exception as e:
             logger.error(f"Error retrieving notes: {str(e)}")
             raise NoteServiceException(f"Failed to retrieve notes: {str(e)}") from e
@@ -412,6 +417,8 @@ class NoteService:
                     f"{config.klee_cloud_api_url}/note/generate-presigned-url/{note_id}",
                     headers={"Authorization": f"Bearer {token}"}
                 )
+        except (UnauthorizedException, NoteNotFoundException):
+            raise
         except Exception as e:
             logger.error(f"Error synchronizing files for note {note_id}: {str(e)}")
             raise NoteServiceException(f"Failed to synchronize files: {str(e)}") from e
@@ -477,6 +484,9 @@ class NoteService:
                     message="Running in local mode, synchronization skipped",
                     data=None
                 )
+
+        except (UnauthorizedException, NoteNotFoundException):
+            raise
         except Exception as e:
             logger.error(f"Service: Error synchronizing files for all notes: {str(e)}")
             raise NoteServiceException(f"Failed to synchronize files for all notes: {str(e)}") from e

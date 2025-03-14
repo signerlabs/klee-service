@@ -118,6 +118,12 @@ class KnowledgeService:
                 )
                 logger.info(f"Get all knowledge response: {response.json()}")
                 return ResponseContent(error_code=0, message="Successfully retrieved all knowledge entries", data=response.json())
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to retrieve knowledge entries: {str(e)}")
 
@@ -207,7 +213,12 @@ class KnowledgeService:
                 response.raise_for_status()
                 return_files = response.json()
                 return ResponseContent(error_code=0, message="Successfully retrieved files", data=return_files)
-
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve files: {str(e)}")
 
@@ -268,6 +279,12 @@ class KnowledgeService:
                 )
                 response.raise_for_status()
                 return ResponseContent(error_code=0, message="Successfully created knowledge entry", data=response.json())
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             logger.error(f"Create knowledge error: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to create knowledge entry: {str(e)}")
@@ -314,6 +331,12 @@ class KnowledgeService:
                 )
                 response.raise_for_status()
                 return response.json()
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Update knowledge database failed: {str(e)}")
 
@@ -357,6 +380,12 @@ class KnowledgeService:
                 )
                 response.raise_for_status()
                 return ResponseContent(error_code=0, message="Successfully deleted knowledge entry", data=None)
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete knowledge entry: {str(e)}")
 
@@ -509,6 +538,12 @@ class KnowledgeService:
                 )
 
                 response.raise_for_status()
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             logger.error(f"Refresh knowledge error: {e}")
             return ResponseContent(error_code=-1, message=f"Refresh knowledge failed, {str(e)}", data={})
@@ -597,6 +632,12 @@ class KnowledgeService:
                 response.raise_for_status()
 
             return ResponseContent(error_code=0, message="Successfully imported knowledge", data={})
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             return ResponseContent(error_code=-1, message=f"Failed to import knowledge: {str(e)}", data={})
 
@@ -657,7 +698,12 @@ class KnowledgeService:
             # Bulk insert files
             if files_to_add:
                 session.add_all(files_to_add)
-
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             logger.error(f"Failed to import directory to cloud: {str(e)}")
             raise Exception(f"Failed to import files: {str(e)}")
@@ -696,6 +742,12 @@ class KnowledgeService:
                 response.raise_for_status()
 
             return ResponseContent(error_code=0, message="Delete file successfully", data={})
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             return ResponseContent(error_code=-1, message=f"Delete file failed, {str(e)}", data={})
 
@@ -774,6 +826,12 @@ class KnowledgeService:
                     response.raise_for_status()
 
             return ResponseContent(error_code=0, message="Upload file successfully", data={})
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             logger.error(f"Upload file error: {e}")
             return ResponseContent(error_code=-1, message=f"Failed to upload file: {str(e)}", data={})
@@ -799,6 +857,12 @@ class KnowledgeService:
                 )
                 files.append(new_file)
             session.add_all(files)
+        except (KnowledgeNotFoundException, UnauthorizedException) as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED if isinstance(e, UnauthorizedException) else status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+                headers={"WWW-Authenticate": "Bearer"} if isinstance(e, UnauthorizedException) else None
+            )
         except Exception as e:
             logger.error(f"Save file to knowledge error, {e}")
             raise Exception(e)
