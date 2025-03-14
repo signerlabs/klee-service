@@ -72,6 +72,7 @@ class ChatController:
 
     async def delete_message(
             self,
+            token,
             message_id: str,
     ):
         """
@@ -81,10 +82,11 @@ class ChatController:
         Returns:
             Response indicating success/failure
         """
-        return await self.chat_service.delete_message(message_id=message_id)
+        return await self.chat_service.delete_message(message_id=message_id, token=token)
 
     async def update_conversation(
             self,
+            token,
             conversation_id: str,
             request: LlamaConversationRequest
     ):
@@ -93,10 +95,11 @@ class ChatController:
         Args:
             conversation_id: ID of the conversation to update
             request: Updated conversation data
+            token: User token
         Returns:
             Response containing updated conversation data
         """
-        return await self.chat_service.update_conversation(conversation_id=conversation_id, request=request)
+        return await self.chat_service.update_conversation(token=token, conversation_id=conversation_id, request=request)
 
     async def llama_get_conversation_message(
             self,
@@ -188,18 +191,20 @@ async def delete_conversation(
 @router.delete("/message/{message_id}")
 async def delete_message(
         message_id: str,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
-    return await conversation_controller.delete_message(message_id=message_id)
+    return await conversation_controller.delete_message(message_id=message_id, token=Authorization)
 
 
 @router.put("/conversations/{conversation_id}")
 async def update_conversation(
         conversation_id: str,
         request: LlamaConversationRequest,
+        Authorization: str = Header(None),
         conversation_controller: ChatController = Depends(ChatController)
 ):
-    return await conversation_controller.update_conversation(conversation_id=conversation_id, request=request)
+    return await conversation_controller.update_conversation(conversation_id=conversation_id, request=request, token=Authorization)
 
 
 @router.get("/conversations/{conversation_id}")
@@ -257,7 +262,7 @@ async def rot_chat(
     return await conversation_controller.rot_chat(chat_request=chat_request, Authorization=Authorization, request=request)
 
 
-@router.post("/cloud")
+@router.post("/cloud-no")
 async def cloud_chat(
         chat_request: LLamaChatRequest,
         Authorization: str = Header(None),
@@ -265,3 +270,11 @@ async def cloud_chat(
 ):
     logger.info(f"Authorization: {Authorization}")
     return await conversation_controller.chat_service.cloud_chat(chat_request=chat_request, token=Authorization)
+
+@router.post("/cloud")
+async def cloud_chat_stream(
+        chat_request: LLamaChatRequest,
+        Authorization: str = Header(None),
+        conversation_controller: ChatController = Depends(ChatController)
+):
+    return await conversation_controller.chat_service.cloud_chat_stream(chat_request=chat_request, token=Authorization)

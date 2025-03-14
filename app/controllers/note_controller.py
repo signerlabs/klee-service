@@ -109,6 +109,22 @@ class NoteController:
         except Exception as e:
             return await self.handle_note_exception(e)
 
+    async def synchronize_files(
+            self,
+            token,
+    ) -> ResponseContent:
+        """Synchronize note files
+
+        Args:
+            token: JWT token
+        Returns:
+            Synchronization result
+        """
+        try:
+            return await self.note_service.sync_note_files(token=token)
+        except Exception as e:
+            return await self.handle_note_exception(e)
+
     async def delete_note(
             self,
             token,
@@ -138,6 +154,14 @@ async def get_all_notes(
     """Get all notes"""
     return await controller.get_all_notes(token=Authorization, keyword=keyword)
 
+@router.get("/synchronize-files")
+async def synchronize_files(
+        Authorization: str = Header(None),
+        controller: NoteController = Depends()
+) -> ResponseContent:
+    """Synchronize note files"""
+    logger.info(f"Synchronizing note files")
+    return await controller.synchronize_files(token=Authorization)
 
 @router.get("/{note_id}")
 async def get_note_by_id(
@@ -164,7 +188,6 @@ async def create_note(
         request=request
     )
 
-
 @router.put("/{note_id}", response_model=NoteResponse)
 async def update_note(
         note_id: str,
@@ -175,7 +198,6 @@ async def update_note(
     """Update note"""
     return await controller.update_note(token=Authorization, note_id=note_id, request=request)
 
-
 @router.delete("/{note_id}")
 async def delete_note(
         note_id: str,
@@ -185,10 +207,3 @@ async def delete_note(
     """Delete note"""
     return await controller.delete_note(token=Authorization, note_id=note_id)
 
-@router.get("/synchronize-files")
-async def synchronize_files(
-        Authorization: str = Header(None),
-        controller: NoteController = Depends()
-) -> ResponseContent:
-    """Synchronize note files"""
-    return ResponseContent(error_code=0, message="Synchronize files successfully", data=None)

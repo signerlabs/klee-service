@@ -4,6 +4,7 @@ import os
 import time
 import uuid
 from dataclasses import asdict
+from datetime import datetime
 from typing import List, Optional
 
 import httpx
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.env_config import config
 from app.model.Response import ResponseContent
+from app.model.knowledge import File
 from app.model.note import CreateNoteRequest, Note, NoteResponse
 from app.services.client_sqlite_service import db_transaction
 from app.model.klee_settings import Settings as KleeSettings
@@ -134,6 +136,8 @@ class NoteService:
                     )
                     response.raise_for_status()
                     logger.info(f"Create note response: {response.json()}")
+
+                    await self._process_local_note(response.json()["id"], request.content)
                     return response.json()
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
@@ -185,8 +189,8 @@ class NoteService:
                 return return_list
             else:
                 response = await KleeSettings.async_http_client.get(
-                    f"{config.klee_cloud_api_url}/note/all",
-                    headers={"Authorization": f"Bearer {token}"}, params={"keyword": keyword}
+                    f"{config.klee_cloud_api_url}/note/all?keyword={keyword}",
+                    headers={"Authorization": f"Bearer {token}"},
                 )
                 response.raise_for_status()
                 logger.info(f"Get all notes response: {response.json()}")
@@ -247,6 +251,7 @@ class NoteService:
                 if response.status_code == 404:
                     raise NoteNotFoundException(f"Note with ID {note_id} not found")
                 response.raise_for_status()
+                await self._process_local_note(response.json()["id"], request.content)
                 return response.json()
         except NoteNotFoundException:
             raise
@@ -379,7 +384,71 @@ class NoteService:
                     f"{config.klee_cloud_api_url}/note/generate-presigned-url/{note_id}",
                     headers={"Authorization": f"Bearer {token}"}
                 )
-                ...
         except Exception as e:
             logger.error(f"Error synchronizing files for note {note_id}: {str(e)}")
             raise NoteServiceException(f"Failed to synchronize files: {str(e)}") from e
+
+    async def sync_note_files(
+            self,
+            token
+    ):
+        """
+        Synchronize files for all notes
+        Returns:
+
+        """
+        try:
+            logger.info(f"Service: Starting note files synchronization. local_mode={KleeSettings.local_mode}")
+            if KleeSettings.local_mode is False:
+                logger.info("Service: Running in cloud mode, proceeding with synchronization")
+                notes = await self.get_all_notes(token=token)
+                logger.info(f"Service: Found {len(notes)} notes to synchronize")
+                for note in notes:
+                    logger.info(f"Service: Synchronizing note {note['id']}")
+                    new_file = File(
+                        name=str(note["id"]) + ".txt",
+                        os_mtime=datetime.now().timestamp(),
+                        format="txt",
+                        size=os.path.getsize(f"{KleeSettings.temp_file_url}{note['id']}/store.txt"),
+                    )
+                    # upload file to cloud
+                    logger.info(f"Service: Uploading file for note {note['id']}")
+                    upload_file_response = await KleeSettings.async_http_client.post(
+                        headers={"Authorization": f"Bearer {token}"},
+                        url=f"{config.klee_cloud_api_url}/file/upload-temp",
+                        files={"file": open(f"{KleeSettings.temp_file_url}{note['id']}/store.txt", "rb")}
+                    )
+                    upload_file_response.raise_for_status()
+
+                    new_file.path = upload_file_response.json()["temp_file_path"]
+                    logger.info(f"Service: File uploaded successfully for note {note['id']}")
+
+                    headers = {"Authorization": f"Bearer {token}"}
+                    request_data = {
+                        "note_id": note["id"],
+                        "file_temp_path": new_file.path
+                    }
+                    logger.info(f"Service: Syncing note {note['id']} with cloud")
+                    response = await KleeSettings.async_http_client.put(
+                        headers=headers,
+                        url=f"{config.klee_cloud_api_url}/note/sync-update/{request_data['note_id']}",
+                        json=request_data
+                    )
+                    response.raise_for_status()
+                    logger.info(f"Service: Note {note['id']} synchronized successfully")
+                logger.info("Service: All notes synchronized successfully")
+                return ResponseContent(
+                    error_code=0,
+                    message="Notes synchronized successfully",
+                    data=None
+                )
+            else:
+                logger.info("Service: Running in local mode, skipping synchronization")
+                return ResponseContent(
+                    error_code=0,
+                    message="Running in local mode, synchronization skipped",
+                    data=None
+                )
+        except Exception as e:
+            logger.error(f"Service: Error synchronizing files for all notes: {str(e)}")
+            raise NoteServiceException(f"Failed to synchronize files for all notes: {str(e)}") from e

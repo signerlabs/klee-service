@@ -74,8 +74,8 @@ class KnowledgeService:
             else:
                 headers = {"Authorization": f"Bearer {token}"}
                 response =  await KleeSettings.async_http_client.get(
-                    url=f"{config.klee_cloud_api_url}/knowledge/all",
-                    headers=headers,
+                    url=f"{config.klee_cloud_api_url}/knowledge/all?keyword={keyword}",
+                    headers=headers
                 )
                 logger.info(f"Get all knowledge response: {response.json()}")
                 return ResponseContent(error_code=0, message="Successfully retrieved all knowledge entries", data=response.json())

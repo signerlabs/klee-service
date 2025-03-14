@@ -318,6 +318,7 @@ class BaseService:
                     "knowledge_ids": json.dumps(llama_request.knowledge_ids, ensure_ascii=False),
                     "note_ids": json.dumps(llama_request.note_ids, ensure_ascii=False)
                 })
+                logger.info(f"update_conversation_setting request: {json_data}")
                 response = await KleeSettings.async_http_client.put(
                     f"{config.klee_cloud_api_url}/conversation/{llama_request.id}",
                     headers= {"Authorization": f"Bearer {token}"},

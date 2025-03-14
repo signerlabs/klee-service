@@ -58,18 +58,18 @@ class LlamaConversationRequest(BaseModel):
     id: str = None
     note_ids: List[str] = None
     knowledge_ids: List[str] = None
-    is_pin: bool = None,
+    is_pin: bool = None
     local_mode: bool = None
-    create_at: float = None,
-    create_time: float = None,
-    update_at: float = None,
-    title: str = None,
+    create_at: float = None
+    create_time: float = None
+    update_at: float = None
+    title: str = None
     provider_id: str = None
     model_id: str = None
     model_name: str = None
     model_path: str = None
     language_id: str = None
-    system_prompt: str = None
+    system_prompt: str = ""
     language: str = None
 
 

@@ -60,120 +60,121 @@ class ChatService:
         Returns:
             ResponseContent: Response containing conversation data
         """
-        try:
-            stmt = select(Llama_conversation).where(
-                Llama_conversation.id == conversation_id)
-            results = await session.execute(stmt)
-            conversation = results.scalars().one_or_none()
-
-            if conversation is None:
-                return ResponseContent(error_code=-1, message=f"Conversation not found: {conversation_id}", data={})
-
-            msg_stmt = select(Llama_chat_message).order_by(Llama_chat_message.create_time.asc()).limit(2).where(
-                Llama_chat_message.conversation_id == conversation_id)
-            results = await session.execute(msg_stmt)
-            msg_list = results.scalars().all()
-
-            if not msg_list:
-                return ResponseContent(error_code=-1, message=f"Not enough messages in conversation: {conversation_id}")
-
-            msg_content = ""
-            for msg in msg_list:
-                if msg.role == "user":
-                    msg_content += f"Question:{msg.content}"
-                else:
-                    msg_content += f"Answer:{msg.content}"
-
-            language = ""
-            if conversation.language_id == "zh":
-                language = "Generate title in Chinese"
-            elif conversation.language_id == "en":
-                language = "Generate title in English"
-            elif conversation.language_id == "auto":
-                language = ""
-
-            question = """
-            Generate a short and descriptive title in {language} for the following content, only in string:
-            {msg_content}
-            """.format(msg_content=msg_content, language=language)
-
-            if conversation.local_mode is True:
-                nest_asyncio.apply()
-                if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
-                    query_engine = await self.llama_index_service.combine_query(
-                        note_ids=json.loads(conversation.note_ids),
-                        file_infos={},
-                        streaming=False
-                    )
-                    response = query_engine.query(question)
-
-                    conversation.title = re.sub(
-                        r'<think>.*?</think>', '', response.response, flags=re.DOTALL)
-
-                    session.add(conversation)
-
-                    return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
-                else:
-                    query_engine = await self.llama_index_service.combine_query(
-                        note_ids=[],
-                        file_infos={},
-                        streaming=False
-                    )
-                    response = query_engine.query(question + language)
-                    conversation.title = response.response.replace(
-                        "\\n", "").strip()
-                    session.add(conversation)
-                    return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
-            else:
-                if conversation.provider_id == SystemTypeDiffModelType.OPENAI.value \
-                        or conversation.provider_id == SystemTypeDiffModelType.CLAUDE.value:
-                    url = f"https://xltwffswqvowersvchkj.supabase.co/functions/v1/chatService-generateConversationTitle"
-                    headers = {
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {Authorization}"
-                    }
-
-                    for key, value in request.headers.items():
-                        if key == "environment":
-                            headers["Environment"] = value
-                            break
-
-                    os.environ["IS_TESTING"] = "True"
-
-                    del os.environ["IS_TESTING"]
-                    messages_list = [{
-                        "role": "user",
-                        "content": question
-                    }]
-                    model_name = ""
-
-                    request_data = {
-                        "provider": str(conversation.provider_id).upper(),
-                        "messages": messages_list,
-                        "model": model_name
-                    }
-
-                    with requests.post(url, headers=headers, json=request_data, stream=False) as response:
-                        response.raise_for_status()  # 如果响应状态不是200，将引发异常
-                        conversation.title = response.text
-                        session.add(conversation)
-
-                    return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
-                else:
-                    query_engine = await self.llama_index_service.combine_query(
-                        note_ids=json.loads(conversation.note_ids),
-                        file_infos={},
-                        streaming=False
-                    )
-                    response = query_engine.query(question)
-                    conversation.title = response.response
-                    session.add(conversation)
-
-                    return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
-
-        except Exception as e:
-            logger.error(f"create_conversation_title error:{str(e)}")
-            return ResponseContent(error_code=-1, message=f"Failed to generate title: {str(e)}", data={})
+        ...
+        # try:
+        #     stmt = select(Llama_conversation).where(
+        #         Llama_conversation.id == conversation_id)
+        #     results = await session.execute(stmt)
+        #     conversation = results.scalars().one_or_none()
+        #
+        #     if conversation is None:
+        #         return ResponseContent(error_code=-1, message=f"Conversation not found: {conversation_id}", data={})
+        #
+        #     msg_stmt = select(Llama_chat_message).order_by(Llama_chat_message.create_time.asc()).limit(2).where(
+        #         Llama_chat_message.conversation_id == conversation_id)
+        #     results = await session.execute(msg_stmt)
+        #     msg_list = results.scalars().all()
+        #
+        #     if not msg_list:
+        #         return ResponseContent(error_code=-1, message=f"Not enough messages in conversation: {conversation_id}")
+        #
+        #     msg_content = ""
+        #     for msg in msg_list:
+        #         if msg.role == "user":
+        #             msg_content += f"Question:{msg.content}"
+        #         else:
+        #             msg_content += f"Answer:{msg.content}"
+        #
+        #     language = ""
+        #     if conversation.language_id == "zh":
+        #         language = "Generate title in Chinese"
+        #     elif conversation.language_id == "en":
+        #         language = "Generate title in English"
+        #     elif conversation.language_id == "auto":
+        #         language = ""
+        #
+        #     question = """
+        #     Generate a short and descriptive title in {language} for the following content, only in string:
+        #     {msg_content}
+        #     """.format(msg_content=msg_content, language=language)
+        #
+        #     if conversation.local_mode is True:
+        #         nest_asyncio.apply()
+        #         if conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
+        #             query_engine = await self.llama_index_service.combine_query(
+        #                 note_ids=json.loads(conversation.note_ids),
+        #                 file_infos={},
+        #                 streaming=False
+        #             )
+        #             response = query_engine.query(question)
+        #
+        #             conversation.title = re.sub(
+        #                 r'<think>.*?</think>', '', response.response, flags=re.DOTALL)
+        #
+        #             session.add(conversation)
+        #
+        #             return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
+        #         else:
+        #             query_engine = await self.llama_index_service.combine_query(
+        #                 note_ids=[],
+        #                 file_infos={},
+        #                 streaming=False
+        #             )
+        #             response = query_engine.query(question + language)
+        #             conversation.title = response.response.replace(
+        #                 "\\n", "").strip()
+        #             session.add(conversation)
+        #             return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
+        #     else:
+        #         if conversation.provider_id == SystemTypeDiffModelType.OPENAI.value \
+        #                 or conversation.provider_id == SystemTypeDiffModelType.CLAUDE.value:
+        #             url = f"https://xltwffswqvowersvchkj.supabase.co/functions/v1/chatService-generateConversationTitle"
+        #             headers = {
+        #                 "Content-Type": "application/json",
+        #                 "Authorization": f"Bearer {Authorization}"
+        #             }
+        #
+        #             for key, value in request.headers.items():
+        #                 if key == "environment":
+        #                     headers["Environment"] = value
+        #                     break
+        #
+        #             os.environ["IS_TESTING"] = "True"
+        #
+        #             del os.environ["IS_TESTING"]
+        #             messages_list = [{
+        #                 "role": "user",
+        #                 "content": question
+        #             }]
+        #             model_name = ""
+        #
+        #             request_data = {
+        #                 "provider": str(conversation.provider_id).upper(),
+        #                 "messages": messages_list,
+        #                 "model": model_name
+        #             }
+        #
+        #             with requests.post(url, headers=headers, json=request_data, stream=False) as response:
+        #                 response.raise_for_status()  # 如果响应状态不是200，将引发异常
+        #                 conversation.title = response.text
+        #                 session.add(conversation)
+        #
+        #             return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
+        #         else:
+        #             query_engine = await self.llama_index_service.combine_query(
+        #                 note_ids=json.loads(conversation.note_ids),
+        #                 file_infos={},
+        #                 streaming=False
+        #             )
+        #             response = query_engine.query(question)
+        #             conversation.title = response.response
+        #             session.add(conversation)
+        #
+        #             return ResponseContent(error_code=0, message="Generate title successfully", data=conversation)
+        #
+        # except Exception as e:
+        #     logger.error(f"create_conversation_title error:{str(e)}")
+        #     return ResponseContent(error_code=-1, message=f"Failed to generate title: {str(e)}", data={})
 
     @db_transaction
     async def create_conversation(
@@ -248,7 +249,7 @@ class ChatService:
                     json=json_data
                 )
                 response.raise_for_status()
-                return ResponseContent(error_code=0, message="Create conversation successfully", data=response.json())
+                return ResponseContent(error_code=0, message="Create conversation successfully", data={"conversation": response.json()})
         except Exception as e:
             logger.error(f"create_conversation error:{str(e)}")
             raise Exception(f"{e}")
@@ -294,42 +295,50 @@ class ChatService:
     async def delete_message(
             self,
             session,
+            token,
             message_id: str
     ):
         """
         Delete a message and its related messages
         Args:
             session: Database session
+            token: Authorization token
             message_id: ID of the message to delete
         Returns:
             ResponseContent: Response indicating success/failure
         """
         try:
-            stmt = select(Llama_chat_message).where(
-                Llama_chat_message.id == message_id)
-            result = await session.execute(stmt)
-            message = result.scalar_one_or_none()
-            if message is None:
-                raise HTTPException(
-                    status_code=404, detail="Message not found")
+            if KleeSettings.local_mode is True:
+                stmt = select(Llama_chat_message).where(
+                    Llama_chat_message.id == message_id)
+                result = await session.execute(stmt)
+                message = result.scalar_one_or_none()
+                if message is None:
+                    raise HTTPException(
+                        status_code=404, detail="Message not found")
 
-            create_time = message.create_time
-            stmt = (select(Llama_chat_message).where(Llama_chat_message.create_time == create_time)
-                    .order_by(Llama_chat_message.create_time.desc())).limit(2)
-            result = await session.execute(stmt)
-            new_messages = result.scalars().all()
+                create_time = message.create_time
+                stmt = (select(Llama_chat_message).where(Llama_chat_message.create_time == create_time)
+                        .order_by(Llama_chat_message.create_time.desc())).limit(2)
+                result = await session.execute(stmt)
+                new_messages = result.scalars().all()
 
-            delete_ids = []
-            for msg in new_messages:
-                del_stmt = delete(Llama_chat_message).where(
-                    Llama_chat_message.id == msg.id)
-                await session.execute(del_stmt)
-                delete_ids.append(msg.id)
-            await session.commit()
+                delete_ids = []
+                for msg in new_messages:
+                    del_stmt = delete(Llama_chat_message).where(
+                        Llama_chat_message.id == msg.id)
+                    await session.execute(del_stmt)
+                    delete_ids.append(msg.id)
 
-            return ResponseContent(error_code=0, message="Successfully deleted message", data={"ids": delete_ids})
+                return ResponseContent(error_code=0, message="Successfully deleted message", data={"ids": delete_ids})
+            else:
+                response = await KleeSettings.async_http_client.delete(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/message/messages-delete/{message_id}"
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Successfully deleted message", data={"ids": response.json()})
         except Exception as e:
-            await session.rollback()
             logger.error(f"delete_message error: {str(e)}")
             return ResponseContent(error_code=-1, message=f"Failed to delete message: {str(e)}", data={})
 
@@ -337,33 +346,60 @@ class ChatService:
     async def update_conversation(
             self,
             session,
+            token,
             conversation_id: str,
             request: LlamaConversationRequest
     ):
         try:
-            result = await session.execute(select(Llama_conversation).filter(Llama_conversation.id == conversation_id))
-            conversation = result.scalar_one_or_none()
-            if conversation is None:
-                raise HTTPException(
-                    status_code=404, detail="Conversation not found")
+            if KleeSettings.local_mode is True:
+                result = await session.execute(select(Llama_conversation).filter(Llama_conversation.id == conversation_id))
+                conversation = result.scalar_one_or_none()
+                if conversation is None:
+                    raise HTTPException(
+                        status_code=404, detail="Conversation not found")
 
-            conversation.title = request.title
-            conversation.is_pin = request.is_pin
-            conversation.update_at = datetime.now().timestamp()
+                conversation.title = request.title
+                conversation.is_pin = request.is_pin
+                conversation.update_at = datetime.now().timestamp()
 
-            await session.commit()
-            await session.refresh(conversation)
+                await session.commit()
+                await session.refresh(conversation)
 
-            conversation_response = {
-                "id": conversation_id,
-                "title": conversation.title,
-                "create_time": conversation.create_time,
-                "is_pin": conversation.is_pin,
-                "language_id": conversation.language_id,
-                "create_at": conversation.create_at,
-                "update_at": conversation.update_at
-            }
-            return ResponseContent(error_code=0, message="Update conversational information successfully", data=conversation_response)
+                conversation_response = {
+                    "id": conversation_id,
+                    "title": conversation.title,
+                    "create_time": conversation.create_time,
+                    "is_pin": conversation.is_pin,
+                    "language_id": conversation.language_id,
+                    "create_at": conversation.create_at,
+                    "update_at": conversation.update_at
+                }
+                return ResponseContent(error_code=0, message="Update conversational information successfully", data=conversation_response)
+            else:
+                # 检查is_pin是否为None或元组(None,)
+                if request.is_pin is None or (isinstance(request.is_pin, tuple) and len(request.is_pin) > 0 and request.is_pin[0] is None):
+                    logger.info(f"is_pin类型: {type(request.is_pin)}, 值: {request.is_pin}, 设置为False")
+                    request.is_pin = False
+                else:
+                    logger.info(f"is_pin类型: {type(request.is_pin)}, 值: {request.is_pin}")
+                
+                request_data = {
+                    "title": request.title,
+                    "is_pin": request.is_pin,
+                    "language_id": request.language_id,
+                    "model_id": request.model_id,
+                    "model_path": request.model_path,
+                    "model_name": request.model_name,
+                    "knowledge_ids": json.dumps(request.knowledge_ids),
+                    "note_ids": json.dumps(request.note_ids),
+                }
+                response = await KleeSettings.async_http_client.put(
+                    headers={"Authorization": f"Bearer {token}"},
+                    url=f"{config.klee_cloud_api_url}/conversation/{conversation_id}",
+                    json=request_data
+                )
+                response.raise_for_status()
+                return ResponseContent(error_code=0, message="Update conversational information successfully", data=response.json())
         except Exception as e:
             await session.rollback()
             logger.error(f"update_conversation error:{str(e)}")
@@ -580,225 +616,236 @@ class ChatService:
             session=None
     ):
         try:
-            stmt = select(Llama_conversation).where(
-                Llama_conversation.id == chat_request.conversation_id)
-            result = await session.execute(stmt)
-            a_conversation = result.scalar_one_or_none()
+            if KleeSettings.local_mode is True:
+                stmt = select(Llama_conversation).where(
+                    Llama_conversation.id == chat_request.conversation_id)
+                result = await session.execute(stmt)
+                a_conversation = result.scalar_one_or_none()
 
-            stmt = select(Llama_chat_message).where(
-                Llama_chat_message.conversation_id == chat_request.conversation_id).order_by(
-                Llama_chat_message.create_time.desc()).limit(4)
-            results = await session.execute(stmt)
+                stmt = select(Llama_chat_message).where(
+                    Llama_chat_message.conversation_id == chat_request.conversation_id).order_by(
+                    Llama_chat_message.create_time.desc()).limit(4)
+                results = await session.execute(stmt)
 
-            provider_id = a_conversation.provider_id
-            model_id = a_conversation.model_id
-            model_path = a_conversation.model_path
+                provider_id = a_conversation.provider_id
+                model_id = a_conversation.model_id
+                model_path = a_conversation.model_path
 
-            # 释放内存
-            if KleeSettings.un_load is True:
-                # try_release()
-                self.llama_index_service.release_memory()
+                # 释放内存
+                if KleeSettings.un_load is True:
+                    # try_release()
+                    self.llama_index_service.release_memory()
 
-                if a_conversation.provider_id is None or a_conversation.provider_id == "":
-                    return ResponseContent(error_code=-1, message="Please select a chatbot model", data={})
+                    if a_conversation.provider_id is None or a_conversation.provider_id == "":
+                        return ResponseContent(error_code=-1, message="Please select a chatbot model", data={})
 
-                api_type = None
-                if KleeSettings.local_mode is True:
-                    if provider_id == SystemTypeDiffModelType.OLLAMA.value and model_id is not None and not model_id == "":
-                        await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_id)
-                    elif provider_id == SystemTypeDiffModelType.KLEE.value and model_id is not None and not model_id == "":
-                        model_path = f"{KleeSettings.llm_path}{str(model_id).lower()}.gguf"
-                        await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_path)
-                    elif provider_id == SystemTypeDiffModelType.LOCAL.value:
-                        await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_path)
-                else:
-                    api_base_url = None
-                    if not provider_id == SystemTypeDiffModelType.OPENAI.value and not provider_id == SystemTypeDiffModelType.CLAUDE.value:
-                        diy_stmt = select(BaseConfig).where(
-                            BaseConfig.id == provider_id)
-                        result = await session.execute(diy_stmt)
-                        config_data = result.scalars().one_or_none()
-                        if not str(a_conversation.model_name).find("claude") == -1:
-                            os.environ["ANTHROPIC_API_KEY"] = config_data.apiKey
-                            api_type = "anthropic"
-                            model_id = a_conversation.model_name
-                        elif not str(a_conversation.model_name).find("gpt") == -1:
-                            os.environ["OPENAI_API_KEY"] = config_data.apiKey
-                            api_type = "openai"
-                            model_id = a_conversation.model_name
-                        elif not str(a_conversation.model_name).find("deepseek") == -1:
-                            os.environ["DEEPSEEK_API_KEY"] = config_data.apiKey
-                            api_type = "deepseek"
-                            model_id = a_conversation.model_name
+                    api_type = None
+                    if KleeSettings.local_mode is True:
+                        if provider_id == SystemTypeDiffModelType.OLLAMA.value and model_id is not None and not model_id == "":
+                            await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_id)
+                        elif provider_id == SystemTypeDiffModelType.KLEE.value and model_id is not None and not model_id == "":
+                            model_path = f"{KleeSettings.llm_path}{str(model_id).lower()}.gguf"
+                            await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_path)
+                        elif provider_id == SystemTypeDiffModelType.LOCAL.value:
+                            await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_path)
+                    else:
+                        api_base_url = None
+                        if not provider_id == SystemTypeDiffModelType.OPENAI.value and not provider_id == SystemTypeDiffModelType.CLAUDE.value:
+                            diy_stmt = select(BaseConfig).where(
+                                BaseConfig.id == provider_id)
+                            result = await session.execute(diy_stmt)
+                            config_data = result.scalars().one_or_none()
+                            if not str(a_conversation.model_name).find("claude") == -1:
+                                os.environ["ANTHROPIC_API_KEY"] = config_data.apiKey
+                                api_type = "anthropic"
+                                model_id = a_conversation.model_name
+                            elif not str(a_conversation.model_name).find("gpt") == -1:
+                                os.environ["OPENAI_API_KEY"] = config_data.apiKey
+                                api_type = "openai"
+                                model_id = a_conversation.model_name
+                            elif not str(a_conversation.model_name).find("deepseek") == -1:
+                                os.environ["DEEPSEEK_API_KEY"] = config_data.apiKey
+                                api_type = "deepseek"
+                                model_id = a_conversation.model_name
 
-                            if config_data.baseUrl.find("luchentech") != -1:
-                                api_base_url = "https://cloud.luchentech.com/api/maas"
+                                if config_data.baseUrl.find("luchentech") != -1:
+                                    api_base_url = "https://cloud.luchentech.com/api/maas"
 
-                    await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_id, api_type=api_type,
-                                                            api_base_url=api_base_url)
+                        await self.llama_index_service.load_llm(provider_id=provider_id, model_name=model_id, api_type=api_type,
+                                                                api_base_url=api_base_url)
 
-            chat_messages = results.scalars().all()
+                chat_messages = results.scalars().all()
 
-            question = chat_request.question
-            language = ""
-            if a_conversation.language_id == "zh":
-                language = f".Please answer in Chinese."
-            elif a_conversation.language_id == "en":
-                language = f".Please reply in English."
-            elif a_conversation.language_id == "auto":
+                question = chat_request.question
                 language = ""
+                if a_conversation.language_id == "zh":
+                    language = f".Please answer in Chinese."
+                elif a_conversation.language_id == "en":
+                    language = f".Please reply in English."
+                elif a_conversation.language_id == "auto":
+                    language = ""
 
-            file_infos = {}
-            knowledge_list = []
-            knowledge_ids = json.loads(a_conversation.knowledge_ids)
-            if len(knowledge_ids) > 0:
-                for knowledge_id in knowledge_ids:
-                    stmt = select(File).where(File.knowledgeId == knowledge_id)
-                    result = await session.execute(stmt)
-                    files = result.scalars().all()
+                file_infos = {}
+                knowledge_list = []
+                knowledge_ids = json.loads(a_conversation.knowledge_ids)
+                if len(knowledge_ids) > 0:
+                    for knowledge_id in knowledge_ids:
+                        stmt = select(File).where(File.knowledgeId == knowledge_id)
+                        result = await session.execute(stmt)
+                        files = result.scalars().all()
 
-                    if len(files) > 0:
-                        file_infos[knowledge_id] = files
-                        knowledge_list.append(files)
+                        if len(files) > 0:
+                            file_infos[knowledge_id] = files
+                            knowledge_list.append(files)
 
-            note_list = []
-            # 这里加入查找note笔记的内容
-            note_ids = json.loads(a_conversation.note_ids)
-            if len(note_ids) > 0:
-                for note_id in note_ids:
-                    stmt = select(Note).where(Note.id == note_id)
-                    result = await session.execute(stmt)
-                    note = result.scalar_one_or_none()
-                    if note is not None:
-                        note_list.append(note)
+                note_list = []
+                # 这里加入查找note笔记的内容
+                note_ids = json.loads(a_conversation.note_ids)
+                if len(note_ids) > 0:
+                    for note_id in note_ids:
+                        stmt = select(Note).where(Note.id == note_id)
+                        result = await session.execute(stmt)
+                        note = result.scalar_one_or_none()
+                        if note is not None:
+                            note_list.append(note)
 
-            nest_asyncio.apply()
+                nest_asyncio.apply()
 
-            # 本地模式
-            if a_conversation.local_mode is True:
-                if a_conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
-                    query_engine = await self.llama_index_service.combine_query(
-                        note_ids=json.loads(a_conversation.note_ids),
-                        file_infos=file_infos
-                    )
-
-                    response = query_engine.query(question + language)
-
-                    return StreamingResponse(
-                        self.generate_data(
-                            session=session,
-                            response=response,
-                            question=question,
-                            conversation_id=chat_request.conversation_id),
-                        media_type="text/event-stream"
-                    )
-                else:
-                    history_message = "|||"
-
-                    chat_history = []
-                    for item in chat_messages:
-                        role = None
-                        if item.role == "user":
-                            role = MessageRole.USER
-                        elif item.role == "assistant":
-                            role = MessageRole.ASSISTANT
-                        chat_message = LlmChatMessage(
-                            role=role,
-                            content=item.content
+                # 本地模式
+                if a_conversation.local_mode is True:
+                    if a_conversation.provider_id == SystemTypeDiffModelType.OLLAMA.value:
+                        query_engine = await self.llama_index_service.combine_query(
+                            note_ids=json.loads(a_conversation.note_ids),
+                            file_infos=file_infos
                         )
-                        chat_history.append(chat_message)
-                        history_message = history_message + item.role + ":" + item.content + "|||"
 
-                        chat_history.append(LlmChatMessage(
-                            role=MessageRole.USER,
-                            content=question + language
-                        ))
+                        response = query_engine.query(question + language)
 
-                    query_engine = await self.llama_index_service.combine_query(
-                        note_ids=json.loads(a_conversation.note_ids),
-                        file_infos=file_infos
-                    )
+                        return StreamingResponse(
+                            self.generate_data(
+                                session=session,
+                                response=response,
+                                question=question,
+                                conversation_id=chat_request.conversation_id),
+                            media_type="text/event-stream"
+                        )
+                    else:
+                        history_message = "|||"
 
-                    real_question = question + language
+                        chat_history = []
+                        for item in chat_messages:
+                            role = None
+                            if item.role == "user":
+                                role = MessageRole.USER
+                            elif item.role == "assistant":
+                                role = MessageRole.ASSISTANT
+                            chat_message = LlmChatMessage(
+                                role=role,
+                                content=item.content
+                            )
+                            chat_history.append(chat_message)
+                            history_message = history_message + item.role + ":" + item.content + "|||"
 
-                    real_question += """.If the answer is unrelated to the question, you can freely express yourself. \n"
-                                   f".Do not directly output the provided text content. \n"
-                                   f".If no text is provided, please provide your own response and organize the answer. \n"""
+                            chat_history.append(LlmChatMessage(
+                                role=MessageRole.USER,
+                                content=question + language
+                            ))
 
-                    response = query_engine.query(real_question)
-                    response_coroutine = self.generate_data(
-                        response=response, question=question, conversation_id=chat_request.conversation_id)
-                    return StreamingResponse(response_coroutine,
-                                             media_type="text/event-stream")
-            else:
-                if a_conversation.provider_id == SystemTypeDiffModelType.OPENAI.value \
-                        or a_conversation.provider_id == SystemTypeDiffModelType.CLAUDE.value \
-                        or a_conversation.provider_id == SystemTypeDiffModelType.DEEPSEEK.value:
-                    url = f"https://xltwffswqvowersvchkj.supabase.co/functions/v1/chatService-createCompletion"
-                    headers = {
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {Authorization}"
-                    }
+                        query_engine = await self.llama_index_service.combine_query(
+                            note_ids=json.loads(a_conversation.note_ids),
+                            file_infos=file_infos
+                        )
 
-                    for key, value in request.headers.items():
-                        if key.lower() == "environment":
-                            headers["Environment"] = value
-                            break
+                        real_question = question + language
 
-                    nest_asyncio.apply()
-                    os.environ["IS_TESTING"] = "True"
-                    query_engine = await self.llama_index_service.combine_query(
-                        note_ids=json.loads(a_conversation.note_ids),
-                        file_infos=file_infos
-                    )
+                        real_question += """.If the answer is unrelated to the question, you can freely express yourself. \n"
+                                       f".Do not directly output the provided text content. \n"
+                                       f".If no text is provided, please provide your own response and organize the answer. \n"""
 
-                    content = await self.llama_index_service.get_retrieve_notes_content(question=question + language,
-                                                                                        query_engine=query_engine)
-                    context = content
-
-                    del os.environ["IS_TESTING"]
-
-                    messages_list = []
-                    for item in chat_messages:
-                        role = None
-                        if item.role == "user":
-                            role = MessageRole.USER
-                        elif item.role == "assistant":
-                            role = MessageRole.ASSISTANT
-                        chat_history_msg = {
-                            "role": role.value,
-                            "content": item.content
-                        }
-                        messages_list.append(chat_history_msg)
-
-                    messages_list.append({
-                        "role": "user",
-                        "content": f"1、{language}，using as many sentences as possible from the text I provided: "
-                        f"```{context}``` to support the answer"
-                        f"2、If the answer is unrelated to the question, you can freely express yourself"
-                        f"3、Do not directly output the provided text content"
-                        f"4、If no text is provided, please provide your own response and organize the answer."
-                        f"My question is：{question}"
-                    })
-
-                    request_data = {
-                        "provider": str(a_conversation.provider_id).upper(),
-                        "messages": messages_list,
-                        "model": a_conversation.model_name
-                    }
-
-                    return StreamingResponse(
-                        self.generate_data_2(url, headers, request_data, conversation_id=a_conversation.id,
-                                             question=question),
-                        media_type="text/event-stream")
+                        response = query_engine.query(real_question)
+                        response_coroutine = self.generate_data(
+                            response=response, question=question, conversation_id=chat_request.conversation_id)
+                        return StreamingResponse(response_coroutine,
+                                                 media_type="text/event-stream")
                 else:
-                    query_engine = await self.llama_index_service.combine_query(
-                        note_ids=json.loads(a_conversation.note_ids),
-                        file_infos=file_infos
+                    if a_conversation.provider_id == SystemTypeDiffModelType.OPENAI.value \
+                            or a_conversation.provider_id == SystemTypeDiffModelType.CLAUDE.value \
+                            or a_conversation.provider_id == SystemTypeDiffModelType.DEEPSEEK.value:
+                        url = f"https://xltwffswqvowersvchkj.supabase.co/functions/v1/chatService-createCompletion"
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {Authorization}"
+                        }
+
+                        for key, value in request.headers.items():
+                            if key.lower() == "environment":
+                                headers["Environment"] = value
+                                break
+
+                        nest_asyncio.apply()
+                        os.environ["IS_TESTING"] = "True"
+                        query_engine = await self.llama_index_service.combine_query(
+                            note_ids=json.loads(a_conversation.note_ids),
+                            file_infos=file_infos
+                        )
+
+                        content = await self.llama_index_service.get_retrieve_notes_content(question=question + language,
+                                                                                            query_engine=query_engine)
+                        context = content
+
+                        del os.environ["IS_TESTING"]
+
+                        messages_list = []
+                        for item in chat_messages:
+                            role = None
+                            if item.role == "user":
+                                role = MessageRole.USER
+                            elif item.role == "assistant":
+                                role = MessageRole.ASSISTANT
+                            chat_history_msg = {
+                                "role": role.value,
+                                "content": item.content
+                            }
+                            messages_list.append(chat_history_msg)
+
+                        messages_list.append({
+                            "role": "user",
+                            "content": f"1、{language}，using as many sentences as possible from the text I provided: "
+                            f"```{context}``` to support the answer"
+                            f"2、If the answer is unrelated to the question, you can freely express yourself"
+                            f"3、Do not directly output the provided text content"
+                            f"4、If no text is provided, please provide your own response and organize the answer."
+                            f"My question is：{question}"
+                        })
+
+                        request_data = {
+                            "provider": str(a_conversation.provider_id).upper(),
+                            "messages": messages_list,
+                            "model": a_conversation.model_name
+                        }
+
+                        return StreamingResponse(
+                            self.generate_data_2(url, headers, request_data, conversation_id=a_conversation.id,
+                                                 question=question),
+                            media_type="text/event-stream")
+                    else:
+                        query_engine = await self.llama_index_service.combine_query(
+                            note_ids=json.loads(a_conversation.note_ids),
+                            file_infos=file_infos
+                        )
+                        response = query_engine.query(question + language)
+                        return StreamingResponse(self.generate_data(response=response, question=question, conversation_id=chat_request.conversation_id),
+                                                 media_type="text/event-stream")
+            else:
+                try:
+                    return await self.cloud_chat_stream(
+                        token=Authorization,
+                        chat_request=chat_request
                     )
-                    response = query_engine.query(question + language)
-                    return StreamingResponse(self.generate_data(response=response, question=question, conversation_id=chat_request.conversation_id),
-                                             media_type="text/event-stream")
+                except Exception as e:
+                    logger.error(f"Error: {str(e)}")
+                    return ResponseContent(error_code=1, message=f"Error: {str(e)}", data=None)
+
         except requests.RequestException as e:
             logger.error(f"Error: {e.response.status_code}- {e.response.text}")
 
@@ -818,6 +865,81 @@ class ChatService:
         except Exception as e:
             logger.error(f"Send chat request failed: {str(e)}")
             return ResponseContent(error_code=1, message=f"Send chat request failed: {str(e)}", data=None)
+
+    async def cloud_chat_stream(
+            self,
+            token,
+            chat_request: LLamaChatRequest
+    ):
+        """
+        发送聊天请求到云端API并以流式方式返回响应
+        
+        Args:
+            token: 认证令牌
+            chat_request: 聊天请求对象
+            
+        Returns:
+            StreamingResponse: 流式响应对象
+        """
+        try:
+            # 使用httpx的流式请求
+            return StreamingResponse(
+                self._stream_cloud_response(token, chat_request),
+                media_type="text/event-stream"
+            )
+        except Exception as e:
+            logger.error(f"Send streaming chat request failed: {str(e)}")
+            # 在流式响应中处理错误
+            async def error_stream():
+                error_data = json.dumps({
+                    "status": "error",
+                    "error_message": f"Send streaming chat request failed: {str(e)}"
+                })
+                yield f"event: error\n"
+                yield f"data: {error_data}\n\n"
+            
+            return StreamingResponse(error_stream(), media_type="text/event-stream")
+    
+    async def _stream_cloud_response(self, token, chat_request: LLamaChatRequest):
+        """
+        从云端API获取流式响应并转发
+        
+        Args:
+            token: 认证令牌
+            chat_request: 聊天请求对象
+            
+        Yields:
+            流式事件数据
+        """
+        try:
+            async with KleeSettings.async_http_client.stream(
+                method="POST",
+                headers={"Authorization": f"Bearer {token}"},
+                url=f"{config.klee_cloud_api_url}/chat/chat/stream",
+                json=asdict(chat_request),
+                timeout=120.0  # 设置较长的超时时间
+            ) as response:
+                # 检查响应状态
+                if response.status_code != 200:
+                    error_content = ""
+                    async for chunk in response.aiter_bytes():
+                        error_content += chunk.decode("utf-8")
+
+                    yield "event: error\n"
+                    yield f"data: {json.dumps({'status': 'error', 'error_message': error_content})}\n\n"
+                    return
+
+                # 处理成功的流式响应
+                async for chunk in response.aiter_bytes():
+                    if chunk:
+                        content = chunk.decode("utf-8")
+                        # 转发云端API的事件和数据
+                        yield f"{content}"
+                    
+        except Exception as e:
+            logger.error(f"Error streaming cloud response: {str(e)}")
+            yield "event: error\n"
+            yield f"data: {json.dumps({'status': 'error', 'error_message': str(e)})}\n\n"
 
     async def generate_data(
             self,
