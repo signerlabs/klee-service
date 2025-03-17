@@ -734,6 +734,10 @@ class ChatService:
 
                         response = query_engine.query(question + language)
 
+                        if len(chat_messages) == 0:
+                            a_conversation.title = question
+                            session.flush()
+
                         return StreamingResponse(
                             self.generate_data(
                                 session=session,
