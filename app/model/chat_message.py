@@ -35,7 +35,7 @@ class Conversation(Base):
     note_ids: str = Column(String, default="", nullable=False)
     title: str = Column(String, default="", nullable=False)
     create_time: float = Column(Double, default=0, nullable=False)
-    is_pin: bool = Column(Boolean, default=False, nullable=False)
+    is_pin: bool = Column(Boolean, default=False, nullable=True)
     # 扩充基础配置在这里
     model_name: str = Column(String, default="")
     local_mode: str = Column(Boolean, default=True, nullable=False)

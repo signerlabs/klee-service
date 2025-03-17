@@ -268,7 +268,6 @@ class NoteService:
                 note.content = request.content
                 note.update_at = datetime.now().timestamp()
 
-                await session.commit()
                 await self._process_local_note(note_id, request.content)
                 note_dict = {k: v for k, v in note.__dict__.items() if k != '_sa_instance_state'}
                 return note_dict

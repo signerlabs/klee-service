@@ -231,7 +231,8 @@ class LlamaIndexService:
                     absolute_path_real += path_arr[i] + "/"
                 elif i == len(path_arr) - 1:
                     # absolute_path_real += "main/all-MiniLM-L6-v2"
-                    absolute_path_real += "all-MiniLM-L6-v2"
+                    # absolute_path_real += "all-MiniLM-L6-v2"
+                    absolute_path_real += "bge-base-en-v1.5"
                 else:
                     absolute_path_real += path_arr[i] + "/"
             logger.info(f"absolute_path_real:{absolute_path_real}")
@@ -383,7 +384,8 @@ class LlamaIndexService:
             self,
             documents,
             save_dir="F:/auto_merge_data",
-            chunk_sizes=None
+            chunk_sizes=None,
+            reload_flag: bool = False
     ) -> VectorStoreIndex:
         """
         Build auto merging index
@@ -393,7 +395,7 @@ class LlamaIndexService:
             chunk_sizes: chunk sizes
         Returns: auto merging index
         """
-        if not os.path.exists(save_dir):
+        if not os.path.exists(save_dir) or reload_flag is True:
             chunk_size = chunk_sizes or self.chunk_sizes
             node_parser = HierarchicalNodeParser.from_defaults(chunk_sizes=chunk_size)
             nodes = node_parser.get_nodes_from_documents(documents)
@@ -714,7 +716,7 @@ class LlamaIndexService:
                 files = file_infos.get(knowledge_id)
                 for file in files:
                     documents = self.load_text_document(source=f"{KleeSettings.temp_file_url}{file.id}")
-                    index = self.build_auto_merging_index(documents, save_dir=f"{KleeSettings.vector_url}{file.id}")
+                    index = self.build_auto_merging_index(documents, save_dir=f"{KleeSettings.vector_url}{file.id}", reload_flag=True)
                     base_retriever = index.as_retriever(
                         similarity_top_k=6
                     )

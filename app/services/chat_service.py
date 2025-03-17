@@ -361,10 +361,13 @@ class ChatService:
 
                 conversation.title = request.title
                 conversation.is_pin = request.is_pin
+
+                if request.is_pin is None:
+                    conversation.is_pin = False
+
                 conversation.update_at = datetime.now().timestamp()
 
-                await session.commit()
-                await session.refresh(conversation)
+                await session.flush()
 
                 conversation_response = {
                     "id": conversation_id,
@@ -736,7 +739,7 @@ class ChatService:
 
                         if len(chat_messages) == 0:
                             a_conversation.title = question
-                            session.flush()
+                            await session.flush()
 
                         return StreamingResponse(
                             self.generate_data(
@@ -775,9 +778,9 @@ class ChatService:
 
                         real_question = question + language
 
-                        real_question += """.If the answer is unrelated to the question, you can freely express yourself. \n"
-                                       f".Do not directly output the provided text content. \n"
-                                       f".If no text is provided, please provide your own response and organize the answer. \n"""
+                        # real_question += """.If the answer is unrelated to the question, you can freely express yourself. \n"
+                        #                f".Do not directly output the provided text content. \n"
+                        #                f".If no text is provided, please provide your own response and organize the answer. \n"""
 
                         response = query_engine.query(real_question)
                         response_coroutine = self.generate_data(
