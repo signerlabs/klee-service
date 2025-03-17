@@ -231,8 +231,8 @@ class LlamaIndexService:
                     absolute_path_real += path_arr[i] + "/"
                 elif i == len(path_arr) - 1:
                     # absolute_path_real += "main/all-MiniLM-L6-v2"
-                    # absolute_path_real += "all-MiniLM-L6-v2"
-                    absolute_path_real += "bge-base-en-v1.5"
+                    absolute_path_real += "all-MiniLM-L6-v2"
+                    # absolute_path_real += "bge-base-en-v1.5"
                 else:
                     absolute_path_real += path_arr[i] + "/"
             logger.info(f"absolute_path_real:{absolute_path_real}")
@@ -334,6 +334,7 @@ class LlamaIndexService:
                 else:
                     KleeSettings.un_load = False
             else:
+                # 本地模型加载(Ollama)
                 if provider_id == SystemTypeDiffModelType.OLLAMA.value:
                     os.environ["http_proxy"] = "http://localhost:11434"
                     llamaSettings.llm = Ollama(
@@ -503,7 +504,6 @@ class LlamaIndexService:
             chat_engine = AgentRunner.from_llm(
                 tools=agent_tools,
                 llm=llamaSettings.llm,
-                #     system_prompt="",  # TODO: Add system prompt
                 verbose=False,
                 streaming=True,
                 chat_history=chat_history
